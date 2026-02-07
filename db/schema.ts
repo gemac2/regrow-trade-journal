@@ -28,6 +28,11 @@ export const trades = pgTable('trades', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const userSettings = pgTable('user_settings', {
+  userId: text('user_id').primaryKey(), // Un registro por usuario
+  initialBalance: numeric('initial_balance').notNull().default('1000'), // Por defecto $1000
+});
+
 // Tipo inferido para usar en TypeScript en toda la app
 export type Trade = typeof trades.$inferSelect;
 export type NewTrade = typeof trades.$inferInsert;

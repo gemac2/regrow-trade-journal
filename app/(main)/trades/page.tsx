@@ -5,17 +5,32 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
 import { getTrades, deleteTrade } from '@/app/actions';
 import { TradeModal } from '@/components/TradeModal';
-import { Plus, Trash2, TrendingUp, TrendingDown, Search, Pencil } from 'lucide-react'; // Import Pencil
+import { 
+  Plus, 
+  Trash2, 
+  TrendingUp, 
+  TrendingDown, 
+  Search, 
+  Pencil, 
+  Filter, 
+  ChevronLeft, 
+  ChevronRight 
+} from 'lucide-react';
 
 export default function TradesPage() {
   const { user } = useAuth();
   const [trades, setTrades] = useState<any[]>([]);
   
-  // State for Modal and Edit
+  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [tradeToEdit, setTradeToEdit] = useState<any>(null); // Holds the trade being edited
-  
+  const [tradeToEdit, setTradeToEdit] = useState<any>(null);
   const [loadingData, setLoadingData] = useState(true);
+
+  // --- NEW STATES FOR FILTERS & PAGINATION ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('ALL'); // Options: ALL, LONG, SHORT
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (user) loadTrades(user.id);
@@ -34,20 +49,39 @@ export default function TradesPage() {
     if (user) loadTrades(user.id);
   }
 
-  // Handle opening modal for EDIT
   function handleEdit(trade: any) {
-    setTradeToEdit(trade); // Set data
-    setIsModalOpen(true);  // Open modal
+    setTradeToEdit(trade);
+    setIsModalOpen(true);
   }
 
-  // Handle opening modal for CREATE
   function handleCreate() {
-    setTradeToEdit(null); // Clear data
-    setIsModalOpen(true); // Open modal
+    setTradeToEdit(null);
+    setIsModalOpen(true);
   }
+
+  // --- FILTERING LOGIC ---
+  const filteredTrades = trades.filter((trade) => {
+    // 1. Search Filter (by Symbol)
+    const matchesSearch = trade.symbol.toLowerCase().includes(searchTerm.toLowerCase());
+    // 2. Type Filter (Long/Short)
+    const matchesType = filterType === 'ALL' || trade.type === filterType;
+    
+    return matchesSearch && matchesType;
+  });
+
+  // --- PAGINATION LOGIC ---
+  const totalPages = Math.ceil(filteredTrades.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentTrades = filteredTrades.slice(startIndex, startIndex + itemsPerPage);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType]);
+
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -56,27 +90,45 @@ export default function TradesPage() {
           <p className="text-gray-400">Manage and review your trading history.</p>
         </div>
         <button 
-          onClick={handleCreate} // Use handleCreate
+          onClick={handleCreate}
           className="flex items-center gap-2 bg-[#00FF7F] text-black px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#00e676] transition shadow-[0_0_20px_rgba(0,255,127,0.2)]"
         >
           <Plus size={18} /> Add Trade
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-[#1e2329] p-4 rounded-xl border border-gray-800 flex gap-4">
-         <div className="relative flex-1 max-w-md">
+      {/* --- CONTROLS BAR (Search & Filters) --- */}
+      <div className="bg-[#1e2329] p-4 rounded-xl border border-gray-800 flex flex-col md:flex-row gap-4">
+         
+         {/* Search Input */}
+         <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
             <input 
               type="text" 
-              placeholder="Search by symbol..." 
-              className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:border-[#00A3FF] outline-none"
+              placeholder="Search symbol (e.g. BTC)..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:border-[#00A3FF] outline-none transition-colors"
             />
+         </div>
+
+         {/* Type Filter Dropdown */}
+         <div className="relative min-w-[150px]">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+            <select 
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:border-[#00A3FF] outline-none appearance-none cursor-pointer"
+            >
+                <option value="ALL">All Types</option>
+                <option value="LONG">Longs Only</option>
+                <option value="SHORT">Shorts Only</option>
+            </select>
          </div>
       </div>
 
       {/* TABLE */}
-      <div className="bg-[#1e2329] rounded-2xl border border-gray-800 overflow-hidden shadow-xl">
+      <div className="bg-[#1e2329] rounded-2xl border border-gray-800 overflow-hidden shadow-xl flex flex-col">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-400">
             <thead className="bg-[#13171D] text-gray-200 uppercase font-medium border-b border-gray-800">
@@ -94,10 +146,14 @@ export default function TradesPage() {
             <tbody className="divide-y divide-gray-800/50">
               {loadingData ? (
                  <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">Loading data...</td></tr>
-              ) : trades.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">No trades registered.</td></tr>
+              ) : currentTrades.length === 0 ? (
+                <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                        {searchTerm || filterType !== 'ALL' ? 'No trades match your filters.' : 'No trades registered.'}
+                    </td>
+                </tr>
               ) : (
-                trades.map((trade) => (
+                currentTrades.map((trade) => (
                   <tr key={trade.id} className="hover:bg-[#252b33] transition-colors group">
                     <td className="px-6 py-4 text-gray-500 text-xs">
                         {new Date(trade.entryDate).toLocaleDateString()}
@@ -122,7 +178,6 @@ export default function TradesPage() {
                       {trade.pnl ? `${Number(trade.pnl) > 0 ? '+' : ''}$${Number(trade.pnl).toFixed(2)}` : 'OPEN'}
                     </td>
                     <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
-                      {/* EDIT BUTTON */}
                       <button 
                         onClick={() => handleEdit(trade)}
                         className="text-gray-600 hover:text-[#00A3FF] transition"
@@ -130,8 +185,6 @@ export default function TradesPage() {
                       >
                         <Pencil size={16} />
                       </button>
-
-                      {/* DELETE BUTTON */}
                       <button 
                         onClick={() => handleDelete(trade.id)}
                         className="text-gray-600 hover:text-red-400 transition"
@@ -146,14 +199,45 @@ export default function TradesPage() {
             </tbody>
           </table>
         </div>
+
+        {/* --- PAGINATION CONTROLS --- */}
+        {totalPages > 1 && (
+            <div className="bg-[#13171D] border-t border-gray-800 p-4 flex items-center justify-between">
+                <span className="text-xs text-gray-500">
+                    Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredTrades.length)} of {filteredTrades.length} entries
+                </span>
+                
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg bg-[#0b0e11] border border-gray-700 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+                    
+                    <span className="text-sm font-mono text-gray-400">
+                        Page <span className="text-white font-bold">{currentPage}</span> of {totalPages}
+                    </span>
+
+                    <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg bg-[#0b0e11] border border-gray-700 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+            </div>
+        )}
       </div>
 
       {user && (
         <TradeModal 
             userId={user.id} 
             isOpen={isModalOpen} 
-            onClose={() => setIsModalOpen(false)} 
-            tradeToEdit={tradeToEdit} // Pass the trade to edit
+            onClose={() => { setIsModalOpen(false); loadTrades(user.id); }} 
+            tradeToEdit={tradeToEdit} 
         />
       )}
     </div>

@@ -5,6 +5,7 @@ import { db } from './lib/db';
 import { trades } from '@/db/schema';
 import { eq, and, isNotNull, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { userSettings } from '@/db/schema';
 
 // 1. Get all trades for a user
 export async function getTrades(userId: string) {
@@ -79,20 +80,37 @@ export async function deleteTrade(id: number) {
 // 4. Get Statistics (New function)
 export async function getStats(userId: string) {
   try {
-    // Fetch all CLOSED trades (where exitPrice is not null)
-    const closedTrades = await db.select().from(trades)
-      .where(and(eq(trades.userId, userId), isNotNull(trades.exitPrice)));
+    // 1. Obtener o Crear Configuración de Saldo Inicial
+    let settings = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+    
+    if (settings.length === 0) {
+      await db.insert(userSettings).values({ userId, initialBalance: '1000' });
+      settings = [{ userId, initialBalance: '1000' }];
+    }
+    const initialBalance = Number(settings[0].initialBalance);
 
-    let totalTrades = closedTrades.length;
+    // 2. Obtener Trades Cerrados
+    const closedTrades = await db.select().from(trades)
+      .where(and(eq(trades.userId, userId), isNotNull(trades.exitPrice)))
+      .orderBy(trades.exitDate);
+
     let netPnL = 0;
     let grossProfit = 0;
     let grossLoss = 0;
     let wins = 0;
+    
+    const chartData = [{
+        date: 'Start',
+        balance: initialBalance,
+        pnl: 0
+    }];
 
-    // Calculate metrics loop
+    let currentBalance = initialBalance;
+
     closedTrades.forEach(trade => {
       const pnl = Number(trade.pnl);
       netPnL += pnl;
+      currentBalance += pnl;
 
       if (pnl > 0) {
         grossProfit += pnl;
@@ -100,9 +118,15 @@ export async function getStats(userId: string) {
       } else {
         grossLoss += Math.abs(pnl);
       }
+
+      chartData.push({
+        date: trade.exitDate ? new Date(trade.exitDate).toLocaleDateString() : 'N/A',
+        balance: Number(currentBalance.toFixed(2)),
+        pnl: pnl
+      });
     });
 
-    // Avoid division by zero
+    const totalTrades = closedTrades.length;
     const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
     const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? 999 : 0);
 
@@ -111,8 +135,11 @@ export async function getStats(userId: string) {
       data: {
         totalTrades,
         netPnL: netPnL.toFixed(2),
-        winRate: winRate.toFixed(1), // One decimal (e.g. 65.5%)
+        winRate: winRate.toFixed(1),
         profitFactor: profitFactor.toFixed(2),
+        currentBalance: currentBalance.toFixed(2),
+        initialBalance: initialBalance.toString(), // <--- ESTA LINEA FALTABA
+        chartData,
         wins,
         losses: totalTrades - wins
       }
@@ -173,5 +200,28 @@ export async function updateTrade(formData: FormData) {
   } catch (error) {
     console.error('Error updating trade:', error);
     return { success: false, error: 'Failed to update trade' };
+  }
+}
+
+export async function updateInitialBalance(userId: string, newBalance: string) {
+  try {
+    // Verificamos si ya existe la configuración
+    const existing = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+
+    if (existing.length > 0) {
+      // Si existe, actualizamos
+      await db.update(userSettings)
+        .set({ initialBalance: newBalance })
+        .where(eq(userSettings.userId, userId));
+    } else {
+      // Si no existe (raro, pero posible), insertamos
+      await db.insert(userSettings).values({ userId, initialBalance: newBalance });
+    }
+
+    revalidatePath('/'); // Recargamos la UI
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating balance:', error);
+    return { success: false, error: 'Failed to update balance' };
   }
 }
