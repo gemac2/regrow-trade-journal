@@ -34,9 +34,9 @@ export async function createAccount(userId: string, name: string, balance: strin
   }
 }
 
-// --- TRADE ACTIONS (UPDATED) ---
+// --- TRADE ACTIONS ---
 
-// 3. Get Trades (Now filtered by Account ID)
+// 3. Get Trades (Filtered by Account ID & User ID)
 export async function getTrades(userId: string, accountId: number) {
   try {
     const data = await db.select().from(trades)
@@ -48,14 +48,16 @@ export async function getTrades(userId: string, accountId: number) {
   }
 }
 
-// 4. Create Trade (Receives Account ID)
+// 4. Create Trade
 export async function createTrade(formData: FormData) {
   const userId = formData.get('userId') as string;
-  const accountId = Number(formData.get('accountId')); // Critical Update
+  const accountId = Number(formData.get('accountId'));
   const symbol = formData.get('symbol') as string;
   const type = formData.get('type') as string;
   const entryPrice = formData.get('entryPrice') as string;
   const size = formData.get('size') as string;
+  
+  // Optional fields
   const exitPrice = formData.get('exitPrice') as string || null;
   const stopLoss = formData.get('stopLoss') as string || null;
   const takeProfit = formData.get('takeProfit') as string || null;
@@ -67,14 +69,19 @@ export async function createTrade(formData: FormData) {
     const entry = parseFloat(entryPrice);
     const exit = parseFloat(exitPrice);
     const positionSize = parseFloat(size);
+    // PnL Formula: (Exit - Entry) * Size * (1 if Long, -1 if Short)
     pnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
-    status = pnl > 0 ? 'WIN' : (pnl < 0 ? 'LOSS' : 'BE');
+    
+    // Determine Status
+    if (pnl > 0) status = 'WIN';
+    else if (pnl < 0) status = 'LOSS';
+    else status = 'BREAKEVEN';
   }
 
   try {
     await db.insert(trades).values({
       userId,
-      accountId, // Link to account
+      accountId,
       symbol: symbol.toUpperCase(),
       type,
       entryPrice,
@@ -88,35 +95,82 @@ export async function createTrade(formData: FormData) {
     revalidatePath('/');
     return { success: true };
   } catch (error) {
-    return { success: false, error: 'Failed' };
+    console.error("Create trade error:", error);
+    return { success: false, error: 'Failed to create trade' };
   }
 }
 
-// 5. Update Trade (Logic remains mostly same, just ensure imports are correct)
+// 5. Update Trade (Logic Restored)
 export async function updateTrade(formData: FormData) {
     const id = Number(formData.get('tradeId'));
-    // ... (Copia la lógica de updateTrade que ya tenías, no cambia mucho)
-    // Solo asegúrate de recalcular PnL si hay exitPrice
-    // ...
-    // Aquí pondré una versión simplificada, usa la tuya completa
-    const exitPrice = formData.get('exitPrice') as string;
-    // ... calculos ...
-    await db.update(trades).set({ /* campos */ }).where(eq(trades.id, id));
-    revalidatePath('/');
-    return { success: true };
-}
+    const symbol = formData.get('symbol') as string;
+    const type = formData.get('type') as string;
+    const entryPrice = formData.get('entryPrice') as string;
+    const size = formData.get('size') as string;
+    
+    // Optional fields
+    const exitPrice = formData.get('exitPrice') as string || null;
+    const stopLoss = formData.get('stopLoss') as string || null;
+    const takeProfit = formData.get('takeProfit') as string || null;
+    
+    let pnl = null;
+    let status = 'OPEN';
+  
+    if (exitPrice) {
+      const entry = parseFloat(entryPrice);
+      const exit = parseFloat(exitPrice);
+      const positionSize = parseFloat(size);
+      
+      pnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
+      
+      if (pnl > 0) status = 'WIN';
+      else if (pnl < 0) status = 'LOSS';
+      else status = 'BREAKEVEN';
+    }
+  
+    try {
+      await db.update(trades).set({
+        symbol: symbol.toUpperCase(),
+        type,
+        entryPrice,
+        exitPrice,
+        size,
+        pnl: pnl ? pnl.toString() : null,
+        stopLoss,
+        takeProfit,
+        status,
+      }).where(eq(trades.id, id));
+  
+      revalidatePath('/');
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating trade:', error);
+      return { success: false, error: 'Failed to update trade' };
+    }
+  }
 
 export async function deleteTrade(id: number) {
-    await db.delete(trades).where(eq(trades.id, id));
-    revalidatePath('/');
-    return { success: true };
+    try {
+        await db.delete(trades).where(eq(trades.id, id));
+        revalidatePath('/');
+        return { success: true };
+    } catch(error) {
+        return { success: false, error: 'Failed to delete' };
+    }
 }
 
-// 6. Get Stats (UPDATED to use Account Initial Balance)
+// 6. Get Stats (SECURED & UPDATED)
 export async function getStats(userId: string, accountId: number) {
   try {
-    // A. Get Account Balance
-    const [account] = await db.select().from(accounts).where(eq(accounts.id, accountId));
+    // A. Get Account Balance SECURELY
+    // We check BOTH accountId AND userId. This prevents IDOR attacks.
+    const [account] = await db.select().from(accounts)
+      .where(and(
+        eq(accounts.id, accountId), 
+        eq(accounts.userId, userId) // <--- SEGURIDAD AÑADIDA
+      ));
+    
+    // If account doesn't exist OR doesn't belong to user, return error
     if (!account) return { success: false, data: null };
     
     const initialBalance = Number(account.initialBalance);
@@ -126,7 +180,7 @@ export async function getStats(userId: string, accountId: number) {
       .where(and(eq(trades.userId, userId), eq(trades.accountId, accountId), isNotNull(trades.exitPrice)))
       .orderBy(trades.exitDate);
 
-    // C. Calculate
+    // C. Calculate Metrics
     let netPnL = 0;
     let grossProfit = 0;
     let grossLoss = 0;
@@ -169,10 +223,12 @@ export async function getStats(userId: string, accountId: number) {
       }
     };
   } catch (error) {
+    console.error(error);
     return { success: false, data: null };
   }
 }
 
+// 7. Update Initial Balance (Secured)
 export async function updateInitialBalance(userId: string, accountId: number, newBalance: string) {
   try {
     await db.update(accounts)

@@ -163,7 +163,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
             }}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition text-sm font-medium"
             >
-            <LogOut size={16} /> Cerrar Sesión
+            <LogOut size={16} /> Log Out
             </button>
         </div>
       </aside>
