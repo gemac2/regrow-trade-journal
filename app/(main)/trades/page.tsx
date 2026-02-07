@@ -3,9 +3,10 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
-import { useAccount } from '@/app/context/AccountContext'; // Import Account Context
+import { useAccount } from '@/app/context/AccountContext';
 import { getTrades, deleteTrade } from '@/app/actions';
 import { TradeModal } from '@/components/TradeModal';
+import { DeleteTradeModal } from '@/components/DeleteTradeModal';
 import { 
   Plus, 
   Trash2, 
@@ -21,22 +22,26 @@ import {
 
 export default function TradesPage() {
   const { user } = useAuth();
-  const { selectedAccount, isLoading: isAccountLoading } = useAccount(); // Get selected account
+  const { selectedAccount, isLoading: isAccountLoading } = useAccount();
   
   const [trades, setTrades] = useState<any[]>([]);
   
-  // Modal states
+  // --- STATES FOR MODALS ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tradeToEdit, setTradeToEdit] = useState<any>(null);
+  
+  // States for Delete Modal
+  const [tradeToDelete, setTradeToDelete] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [loadingData, setLoadingData] = useState(true);
 
-  // --- FILTERS & PAGINATION STATES ---
+  // Filters & Pagination
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL'); 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Load trades when User OR Selected Account changes
   useEffect(() => {
     if (user && selectedAccount) {
       loadTrades(user.id, selectedAccount.id);
@@ -45,18 +50,25 @@ export default function TradesPage() {
 
   async function loadTrades(userId: string, accountId: number) {
     setLoadingData(true);
-    // Fetch trades specific to this account
     const { success, data } = await getTrades(userId, accountId);
     if (success && data) setTrades(data);
-    else setTrades([]); // Clear trades if fetch fails or empty
+    else setTrades([]);
     setLoadingData(false);
   }
 
-  async function handleDelete(id: number) {
-    if(!confirm("Delete this trade?")) return;
-    await deleteTrade(id);
-    // Reload using current selected account
-    if (user && selectedAccount) loadTrades(user.id, selectedAccount.id);
+  // --- DELETE LOGIC ---
+  function requestDelete(id: number) {
+    setTradeToDelete(id);
+  }
+
+  async function confirmDelete() {
+    if (!tradeToDelete || !user || !selectedAccount) return;
+    
+    setIsDeleting(true);
+    await deleteTrade(tradeToDelete);
+    await loadTrades(user.id, selectedAccount.id);
+    setIsDeleting(false);
+    setTradeToDelete(null);
   }
 
   function handleEdit(trade: any) {
@@ -69,14 +81,13 @@ export default function TradesPage() {
     setIsModalOpen(true);
   }
 
-  // --- FILTERING LOGIC ---
+  // Filtering Logic
   const filteredTrades = trades.filter((trade) => {
     const matchesSearch = trade.symbol.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'ALL' || trade.type === filterType;
     return matchesSearch && matchesType;
   });
 
-  // --- PAGINATION LOGIC ---
   const totalPages = Math.ceil(filteredTrades.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentTrades = filteredTrades.slice(startIndex, startIndex + itemsPerPage);
@@ -86,7 +97,6 @@ export default function TradesPage() {
   }, [searchTerm, filterType]);
 
 
-  // If account context is loading or no account selected, show loader
   if (isAccountLoading || !selectedAccount) {
     return (
       <div className="flex h-full items-center justify-center p-10">
@@ -114,10 +124,8 @@ export default function TradesPage() {
         </button>
       </div>
 
-      {/* --- CONTROLS BAR (Search & Filters) --- */}
+      {/* Controls Bar */}
       <div className="bg-[#1e2329] p-4 rounded-xl border border-gray-800 flex flex-col md:flex-row gap-4">
-         
-         {/* Search Input */}
          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
             <input 
@@ -128,8 +136,6 @@ export default function TradesPage() {
               className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:border-[#00A3FF] outline-none transition-colors"
             />
          </div>
-
-         {/* Type Filter Dropdown */}
          <div className="relative min-w-[150px]">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
             <select 
@@ -153,6 +159,8 @@ export default function TradesPage() {
                 <th className="px-6 py-4">Date</th>
                 <th className="px-6 py-4">Symbol</th>
                 <th className="px-6 py-4">Type</th>
+                {/* NUEVA COLUMNA */}
+                <th className="px-6 py-4">Strategy</th>
                 <th className="px-6 py-4">Entry</th>
                 <th className="px-6 py-4">Size</th>
                 <th className="px-6 py-4">Exit</th>
@@ -162,10 +170,10 @@ export default function TradesPage() {
             </thead>
             <tbody className="divide-y divide-gray-800/50">
               {loadingData ? (
-                 <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">Loading data...</td></tr>
+                 <tr><td colSpan={9} className="px-6 py-12 text-center text-gray-500">Loading data...</td></tr>
               ) : currentTrades.length === 0 ? (
                 <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                         {searchTerm || filterType !== 'ALL' ? 'No trades match your filters.' : 'No trades registered for this account.'}
                     </td>
                 </tr>
@@ -184,6 +192,18 @@ export default function TradesPage() {
                         {trade.type}
                       </span>
                     </td>
+                    
+                    {/* NUEVA CELDA: STRATEGY */}
+                    <td className="px-6 py-4">
+                        {trade.strategy ? (
+                            <span className="bg-[#0b0e11] text-gray-300 px-2 py-1 rounded text-xs border border-gray-700 font-medium">
+                                {trade.strategy}
+                            </span>
+                        ) : (
+                            <span className="text-gray-600 text-xs">-</span>
+                        )}
+                    </td>
+
                     <td className="px-6 py-4 font-mono text-gray-300">${Number(trade.entryPrice).toFixed(2)}</td>
                     <td className="px-6 py-4 font-mono">{Number(trade.size).toFixed(3)}</td>
                     <td className="px-6 py-4 font-mono text-gray-300">
@@ -203,7 +223,7 @@ export default function TradesPage() {
                         <Pencil size={16} />
                       </button>
                       <button 
-                        onClick={() => handleDelete(trade.id)}
+                        onClick={() => requestDelete(trade.id)} 
                         className="text-gray-600 hover:text-red-400 transition"
                         title="Delete"
                       >
@@ -216,8 +236,8 @@ export default function TradesPage() {
             </tbody>
           </table>
         </div>
-
-        {/* --- PAGINATION CONTROLS --- */}
+        
+        {/* Pagination Controls */}
         {totalPages > 1 && (
             <div className="bg-[#13171D] border-t border-gray-800 p-4 flex items-center justify-between">
                 <span className="text-xs text-gray-500">
@@ -250,13 +270,22 @@ export default function TradesPage() {
       </div>
 
       {user && selectedAccount && (
-        <TradeModal 
-            userId={user.id}
-            accountId={selectedAccount.id} // PASS ACCOUNT ID HERE
-            isOpen={isModalOpen} 
-            onClose={() => { setIsModalOpen(false); loadTrades(user.id, selectedAccount.id); }} 
-            tradeToEdit={tradeToEdit} 
-        />
+        <>
+            <TradeModal 
+                userId={user.id}
+                accountId={selectedAccount.id}
+                isOpen={isModalOpen} 
+                onClose={() => { setIsModalOpen(false); loadTrades(user.id, selectedAccount.id); }} 
+                tradeToEdit={tradeToEdit} 
+            />
+            
+            <DeleteTradeModal 
+                isOpen={tradeToDelete !== null}
+                onClose={() => setTradeToDelete(null)}
+                onConfirm={confirmDelete}
+                isDeleting={isDeleting}
+            />
+        </>
       )}
     </div>
   );

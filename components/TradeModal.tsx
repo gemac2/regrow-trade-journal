@@ -7,7 +7,7 @@ import { X, Loader2 } from 'lucide-react';
 
 interface TradeModalProps {
   userId: string;
-  accountId: number; // <--- NEW REQUIRED PROP
+  accountId: number;
   isOpen: boolean;
   onClose: () => void;
   tradeToEdit?: any; 
@@ -16,6 +16,18 @@ interface TradeModalProps {
 export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: TradeModalProps) {
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState('LONG');
+
+  // Lista de estrategias predefinidas
+  const strategies = [
+    "Price Action",
+    "Smart Money / ICT",
+    "Breakout",
+    "Trend Following",
+    "Reversal",
+    "Scalping",
+    "News / Fundamental",
+    "Algorithmic"
+  ];
 
   // Load existing data when editing
   useEffect(() => {
@@ -33,22 +45,19 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
     
     if (tradeToEdit) {
       // --- UPDATE MODE ---
-      // We don't need accountId here usually, as we rely on the Trade ID
       formData.append('tradeId', tradeToEdit.id); 
       formData.append('type', type); 
       await updateTrade(formData);
     } else {
       // --- CREATE MODE ---
       formData.append('userId', userId);
-      formData.append('accountId', accountId.toString()); // <--- IMPORTANT: Send Account ID
+      formData.append('accountId', accountId.toString());
       formData.append('type', type);
       await createTrade(formData);
     }
     
     setLoading(false);
     onClose();
-    // Refresh logic usually handled by parent or revalidatePath, 
-    // but we can force reload to be safe if needed, or better: call onClose which triggers reload in parent
   }
 
   return (
@@ -89,15 +98,37 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
             </button>
           </div>
 
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">Pair / Symbol</label>
-            <input 
-              name="symbol" 
-              required 
-              defaultValue={tradeToEdit?.symbol || ''}
-              placeholder="BTCUSDT" 
-              className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none uppercase" 
-            />
+          {/* Grid: Symbol + Strategy */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Pair / Symbol</label>
+              <input 
+                name="symbol" 
+                required 
+                defaultValue={tradeToEdit?.symbol || ''}
+                placeholder="BTCUSDT" 
+                className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none uppercase" 
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Strategy</label>
+              <div className="relative">
+                <select 
+                  name="strategy" 
+                  defaultValue={tradeToEdit?.strategy || ''}
+                  className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none appearance-none cursor-pointer text-sm" 
+                >
+                  <option value="" className="text-gray-500">Select...</option>
+                  {strategies.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                {/* Custom Arrow Icon (Optional styling) */}
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

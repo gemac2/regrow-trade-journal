@@ -48,12 +48,13 @@ export async function getTrades(userId: string, accountId: number) {
   }
 }
 
-// 4. Create Trade
+// 4. Create Trade (UPDATED WITH STRATEGY)
 export async function createTrade(formData: FormData) {
   const userId = formData.get('userId') as string;
   const accountId = Number(formData.get('accountId'));
   const symbol = formData.get('symbol') as string;
   const type = formData.get('type') as string;
+  const strategy = formData.get('strategy') as string || null; // <--- NUEVO: Capturar estrategia
   const entryPrice = formData.get('entryPrice') as string;
   const size = formData.get('size') as string;
   
@@ -84,6 +85,7 @@ export async function createTrade(formData: FormData) {
       accountId,
       symbol: symbol.toUpperCase(),
       type,
+      strategy, // <--- NUEVO: Guardar estrategia
       entryPrice,
       exitPrice,
       size,
@@ -100,11 +102,12 @@ export async function createTrade(formData: FormData) {
   }
 }
 
-// 5. Update Trade (Logic Restored)
+// 5. Update Trade (UPDATED WITH STRATEGY)
 export async function updateTrade(formData: FormData) {
     const id = Number(formData.get('tradeId'));
     const symbol = formData.get('symbol') as string;
     const type = formData.get('type') as string;
+    const strategy = formData.get('strategy') as string || null; // <--- NUEVO: Capturar estrategia
     const entryPrice = formData.get('entryPrice') as string;
     const size = formData.get('size') as string;
     
@@ -132,6 +135,7 @@ export async function updateTrade(formData: FormData) {
       await db.update(trades).set({
         symbol: symbol.toUpperCase(),
         type,
+        strategy, // <--- NUEVO: Actualizar estrategia
         entryPrice,
         exitPrice,
         size,
@@ -159,18 +163,16 @@ export async function deleteTrade(id: number) {
     }
 }
 
-// 6. Get Stats (SECURED & UPDATED)
+// 6. Get Stats (SECURED)
 export async function getStats(userId: string, accountId: number) {
   try {
     // A. Get Account Balance SECURELY
-    // We check BOTH accountId AND userId. This prevents IDOR attacks.
     const [account] = await db.select().from(accounts)
       .where(and(
         eq(accounts.id, accountId), 
-        eq(accounts.userId, userId) // <--- SEGURIDAD AÑADIDA
+        eq(accounts.userId, userId)
       ));
     
-    // If account doesn't exist OR doesn't belong to user, return error
     if (!account) return { success: false, data: null };
     
     const initialBalance = Number(account.initialBalance);

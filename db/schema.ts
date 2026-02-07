@@ -22,6 +22,8 @@ export const trades = pgTable('trades', {
   symbol: varchar('symbol', { length: 20 }).notNull(),
   type: varchar('type', { length: 5 }).notNull(),
   status: varchar('status', { length: 10 }).default('OPEN'),
+
+  strategy: varchar('strategy', { length: 50 }),
   
   entryPrice: numeric('entry_price').notNull(),
   exitPrice: numeric('exit_price'),
