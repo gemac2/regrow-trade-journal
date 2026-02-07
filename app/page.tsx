@@ -80,8 +80,7 @@ export default function LandingPage() {
              {/* Aquí podrías poner una imagen real luego */}
              <div className="text-center">
                 <Layout size={64} className="mx-auto text-gray-700 mb-4 group-hover:text-[#00FF7F] transition duration-500" />
-                <p className="text-gray-500 font-mono text-sm">Dashboard Preview</p>
-                {/* <img src="/dashboard-mockup.png" alt="App Interface" className="w-full h-full object-cover" /> */}
+                <img src="/dashboard-mockup.png" alt="App Interface" className="w-full h-full object-cover" />
              </div>
              
              {/* Floating Badge Example */}
