@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
+import { useAccount } from '@/app/context/AccountContext'; // Import Account Context
 import { getTrades, deleteTrade } from '@/app/actions';
 import { TradeModal } from '@/components/TradeModal';
 import { 
@@ -14,11 +15,14 @@ import {
   Pencil, 
   Filter, 
   ChevronLeft, 
-  ChevronRight 
+  ChevronRight,
+  Loader2 
 } from 'lucide-react';
 
 export default function TradesPage() {
   const { user } = useAuth();
+  const { selectedAccount, isLoading: isAccountLoading } = useAccount(); // Get selected account
+  
   const [trades, setTrades] = useState<any[]>([]);
   
   // Modal states
@@ -26,27 +30,33 @@ export default function TradesPage() {
   const [tradeToEdit, setTradeToEdit] = useState<any>(null);
   const [loadingData, setLoadingData] = useState(true);
 
-  // --- NEW STATES FOR FILTERS & PAGINATION ---
+  // --- FILTERS & PAGINATION STATES ---
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('ALL'); // Options: ALL, LONG, SHORT
+  const [filterType, setFilterType] = useState('ALL'); 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Load trades when User OR Selected Account changes
   useEffect(() => {
-    if (user) loadTrades(user.id);
-  }, [user]);
+    if (user && selectedAccount) {
+      loadTrades(user.id, selectedAccount.id);
+    }
+  }, [user, selectedAccount]);
 
-  async function loadTrades(userId: string) {
+  async function loadTrades(userId: string, accountId: number) {
     setLoadingData(true);
-    const { success, data } = await getTrades(userId);
+    // Fetch trades specific to this account
+    const { success, data } = await getTrades(userId, accountId);
     if (success && data) setTrades(data);
+    else setTrades([]); // Clear trades if fetch fails or empty
     setLoadingData(false);
   }
 
   async function handleDelete(id: number) {
     if(!confirm("Delete this trade?")) return;
     await deleteTrade(id);
-    if (user) loadTrades(user.id);
+    // Reload using current selected account
+    if (user && selectedAccount) loadTrades(user.id, selectedAccount.id);
   }
 
   function handleEdit(trade: any) {
@@ -61,11 +71,8 @@ export default function TradesPage() {
 
   // --- FILTERING LOGIC ---
   const filteredTrades = trades.filter((trade) => {
-    // 1. Search Filter (by Symbol)
     const matchesSearch = trade.symbol.toLowerCase().includes(searchTerm.toLowerCase());
-    // 2. Type Filter (Long/Short)
     const matchesType = filterType === 'ALL' || trade.type === filterType;
-    
     return matchesSearch && matchesType;
   });
 
@@ -74,11 +81,19 @@ export default function TradesPage() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentTrades = filteredTrades.slice(startIndex, startIndex + itemsPerPage);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterType]);
 
+
+  // If account context is loading or no account selected, show loader
+  if (isAccountLoading || !selectedAccount) {
+    return (
+      <div className="flex h-full items-center justify-center p-10">
+        <Loader2 className="animate-spin text-[#00FF7F]" size={40} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-10">
@@ -86,7 +101,9 @@ export default function TradesPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Trade Log</h1>
+          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+            {selectedAccount.name} <span className="text-gray-600 text-lg font-normal">Trade Log</span>
+          </h1>
           <p className="text-gray-400">Manage and review your trading history.</p>
         </div>
         <button 
@@ -149,7 +166,7 @@ export default function TradesPage() {
               ) : currentTrades.length === 0 ? (
                 <tr>
                     <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                        {searchTerm || filterType !== 'ALL' ? 'No trades match your filters.' : 'No trades registered.'}
+                        {searchTerm || filterType !== 'ALL' ? 'No trades match your filters.' : 'No trades registered for this account.'}
                     </td>
                 </tr>
               ) : (
@@ -232,11 +249,12 @@ export default function TradesPage() {
         )}
       </div>
 
-      {user && (
+      {user && selectedAccount && (
         <TradeModal 
-            userId={user.id} 
+            userId={user.id}
+            accountId={selectedAccount.id} // PASS ACCOUNT ID HERE
             isOpen={isModalOpen} 
-            onClose={() => { setIsModalOpen(false); loadTrades(user.id); }} 
+            onClose={() => { setIsModalOpen(false); loadTrades(user.id, selectedAccount.id); }} 
             tradeToEdit={tradeToEdit} 
         />
       )}

@@ -3,12 +3,13 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
+import { useAccount } from '@/app/context/AccountContext'; // Importamos el Contexto
 import { getStats } from '@/app/actions';
 import { Loader2, TrendingUp, TrendingDown, Activity, Wallet, Pencil } from 'lucide-react'; 
 import { GrowthChart } from '@/components/GrowthChart';
 import { SettingsModal } from '@/components/SettingsModal'; 
 
-// 1. Interface correcta
+// Interface correcta
 interface DashboardStats {
   netPnL: string;
   winRate: string;
@@ -21,6 +22,8 @@ interface DashboardStats {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { selectedAccount, isLoading: isAccountLoading } = useAccount(); // Usamos el contexto de cuentas
+  
   const [loading, setLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -34,16 +37,19 @@ export default function DashboardPage() {
     chartData: []
   });
 
+  // Efecto: Cargar datos cuando cambia el usuario O la cuenta seleccionada
   useEffect(() => {
-    if (user) loadStats(user.id);
-  }, [user]);
+    if (user && selectedAccount) {
+      loadStats(user.id, selectedAccount.id);
+    }
+  }, [user, selectedAccount]);
 
-  async function loadStats(userId: string) {
+  async function loadStats(userId: string, accountId: number) {
     setLoading(true);
-    const { success, data } = await getStats(userId);
+    // Ahora pasamos el accountId a la función getStats
+    const { success, data } = await getStats(userId, accountId);
     
     if (success && data) {
-      // Usamos 'as any' para evitar el error de TS mientras se actualiza el tipo del server action
       const backendData = data as any;
       
       setStats({
@@ -52,7 +58,7 @@ export default function DashboardPage() {
         profitFactor: backendData.profitFactor,
         totalTrades: backendData.totalTrades,
         currentBalance: backendData.currentBalance,
-        initialBalance: backendData.initialBalance || "1000", // Usa el valor del backend
+        initialBalance: backendData.initialBalance || "0", 
         chartData: backendData.chartData
       });
     }
@@ -61,13 +67,25 @@ export default function DashboardPage() {
 
   const pnlColor = Number(stats.netPnL) >= 0 ? 'text-[#00FF7F]' : 'text-red-500';
 
+  // Si está cargando el contexto de cuentas o no hay cuenta seleccionada, mostramos loader
+  if (isAccountLoading || !selectedAccount) {
+    return (
+      <div className="flex h-full items-center justify-center p-10">
+        <Loader2 className="animate-spin text-[#00FF7F]" size={40} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       
       {/* Top Section */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Main Dashboard</h1>
+          {/* Mostramos el nombre de la cuenta seleccionada dinámicamente */}
+          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+            {selectedAccount.name} <span className="text-gray-600 text-lg font-normal">Dashboard</span>
+          </h1>
           <p className="text-gray-400">Welcome back, trader. Here is your performance.</p>
         </div>
         
@@ -160,12 +178,13 @@ export default function DashboardPage() {
            )}
        </div>
 
-      {user && (
+      {user && selectedAccount && ( // Asegúrate de verificar selectedAccount
         <SettingsModal 
-          userId={user.id} 
-          isOpen={isSettingsOpen} 
-          onClose={() => setIsSettingsOpen(false)}
-          currentInitialBalance={stats.initialBalance}
+            userId={user.id} 
+            accountId={selectedAccount.id} // <--- AGREGAR ESTO
+            isOpen={isSettingsOpen} 
+            onClose={() => setIsSettingsOpen(false)}
+            currentInitialBalance={stats.initialBalance}
         />
       )}
     </div>

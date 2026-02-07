@@ -7,12 +7,13 @@ import { X, Loader2, Save } from 'lucide-react';
 
 interface SettingsModalProps {
   userId: string;
+  accountId: number; // <--- NUEVA PROP REQUERIDA
   isOpen: boolean;
   onClose: () => void;
   currentInitialBalance: string;
 }
 
-export function SettingsModal({ userId, isOpen, onClose, currentInitialBalance }: SettingsModalProps) {
+export function SettingsModal({ userId, accountId, isOpen, onClose, currentInitialBalance }: SettingsModalProps) {
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState(currentInitialBalance);
 
@@ -21,7 +22,8 @@ export function SettingsModal({ userId, isOpen, onClose, currentInitialBalance }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await updateInitialBalance(userId, balance);
+    // Ahora pasamos el accountId a la acción
+    await updateInitialBalance(userId, accountId, balance);
     setLoading(false);
     onClose();
     window.location.reload();
@@ -50,7 +52,7 @@ export function SettingsModal({ userId, isOpen, onClose, currentInitialBalance }
               className="w-full bg-[#0b0e11] border border-gray-700 rounded-xl p-4 text-2xl font-mono text-white focus:border-[#00A3FF] outline-none" 
             />
             <p className="text-xs text-gray-500 mt-2">
-              This will recalculate your equity curve from the start.
+              This will recalculate your equity curve for this account.
             </p>
           </div>
 

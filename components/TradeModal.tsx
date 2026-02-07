@@ -7,12 +7,13 @@ import { X, Loader2 } from 'lucide-react';
 
 interface TradeModalProps {
   userId: string;
+  accountId: number; // <--- NEW REQUIRED PROP
   isOpen: boolean;
   onClose: () => void;
-  tradeToEdit?: any; // New prop: optional trade data to edit
+  tradeToEdit?: any; 
 }
 
-export function TradeModal({ userId, isOpen, onClose, tradeToEdit }: TradeModalProps) {
+export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: TradeModalProps) {
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState('LONG');
 
@@ -32,19 +33,22 @@ export function TradeModal({ userId, isOpen, onClose, tradeToEdit }: TradeModalP
     
     if (tradeToEdit) {
       // --- UPDATE MODE ---
-      formData.append('tradeId', tradeToEdit.id); // Send ID to backend
-      formData.append('type', type); // Ensure type state is sent
+      // We don't need accountId here usually, as we rely on the Trade ID
+      formData.append('tradeId', tradeToEdit.id); 
+      formData.append('type', type); 
       await updateTrade(formData);
     } else {
       // --- CREATE MODE ---
       formData.append('userId', userId);
+      formData.append('accountId', accountId.toString()); // <--- IMPORTANT: Send Account ID
       formData.append('type', type);
       await createTrade(formData);
     }
     
     setLoading(false);
     onClose();
-    window.location.reload(); 
+    // Refresh logic usually handled by parent or revalidatePath, 
+    // but we can force reload to be safe if needed, or better: call onClose which triggers reload in parent
   }
 
   return (
