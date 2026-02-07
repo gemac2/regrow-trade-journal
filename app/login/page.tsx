@@ -1,20 +1,33 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation'; // Importamos useSearchParams
 import { authClient } from '@/app/lib/auth';
 import { Logo } from '@/components/Logo';
 import { Mail, Lock, User, Loader2 } from 'lucide-react';
 
-export default function LoginPage() {
+// Separamos el formulario en un componente interno para usar useSearchParams dentro de Suspense
+function AuthForm() {
   const router = useRouter();
-  const [isLoginView, setIsLoginView] = useState(true); 
+  const searchParams = useSearchParams(); // Hook para leer la URL
+  
+  // Detectamos si la URL tiene ?view=register
+  const initialView = searchParams.get('view') === 'register' ? false : true;
+
+  const [isLoginView, setIsLoginView] = useState(initialView); 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // Efecto para actualizar la vista si cambia la URL (opcional pero recomendado)
+  useEffect(() => {
+    if (searchParams.get('view') === 'register') {
+      setIsLoginView(false);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,16 +37,16 @@ export default function LoginPage() {
     try {
       if (isLoginView) {
         const { error } = await authClient.signIn.email({
-          email, password, callbackURL: '/', 
+          email, password, callbackURL: '/dashboard', 
         });
         if (error) throw error;
-        router.push('/');
+        router.push('/dashboard');
       } else {
         const { error } = await authClient.signUp.email({
-          email, password, name, callbackURL: '/',
+          email, password, name, callbackURL: '/dashboard',
         });
         if (error) throw error;
-        router.push('/');
+        router.push('/dashboard');
       }
     } catch (err: any) {
       console.error(err);
@@ -45,20 +58,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-[#05070A] bg-[radial-gradient(#ffffff05_1px,transparent_1px)] [background-size:20px_20px] p-4 font-sans text-white selection:bg-blue-500/30">
-      
-      {/* CAMBIO: Reduje 'space-y-12' a 'space-y-6' para acercar la tarjeta al logo */}
-      <div className="flex w-full max-w-[420px] flex-col items-center space-y-6"> 
+    <div className="flex w-full max-w-[420px] flex-col items-center space-y-6"> 
         
         {/* Header Section */}
         <div className="flex flex-col items-center text-center">
-          
-          {/* Contenedor del Logo con margen negativo inferior para "comerse" el espacio vacío de la imagen */}
           <div className="-mt-[70px]"> 
             <Logo />
           </div>
-
-          {/* CAMBIO: Texto más pequeño (3xl) y con menos margen superior */}
           <h1 className="text-3xl font-bold tracking-tight -mt-[70px] text-white">Trading Journal</h1>
           <p className="text-sm text-gray-400 mt-1">Welcome back, trader.</p>
         </div>
@@ -70,6 +76,7 @@ export default function LoginPage() {
             {/* Tabs */}
             <div className="mb-8 flex border-b border-gray-800/50">
               <button
+                type="button"
                 onClick={() => setIsLoginView(true)}
                 className={`flex-1 pb-3 text-sm font-semibold transition-all relative ${
                   isLoginView ? 'text-[#00FF7F]' : 'text-gray-500 hover:text-gray-300'
@@ -79,6 +86,7 @@ export default function LoginPage() {
                 {isLoginView && <div className="absolute bottom-0 left-0 h-[2px] w-full bg-[#00FF7F] shadow-[0_-2px_10px_rgba(0,255,127,0.5)]"></div>}
               </button>
               <button
+                type="button"
                 onClick={() => setIsLoginView(false)}
                 className={`flex-1 pb-3 text-sm font-semibold transition-all relative ${
                   !isLoginView ? 'text-[#00A3FF]' : 'text-gray-500 hover:text-gray-300'
@@ -95,7 +103,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Formulario más compacto (space-y-5) */}
             <form onSubmit={handleSubmit} className="space-y-5">
               
               {!isLoginView && (
@@ -166,6 +173,16 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+  );
+}
+
+// Componente Principal envuelto en Suspense
+export default function LoginPage() {
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center bg-[#05070A] bg-[radial-gradient(#ffffff05_1px,transparent_1px)] [background-size:20px_20px] p-4 font-sans text-white selection:bg-blue-500/30">
+      <Suspense fallback={<div className="text-[#00FF7F] font-bold animate-pulse">Loading Interface...</div>}>
+        <AuthForm />
+      </Suspense>
     </div>
   );
 }
