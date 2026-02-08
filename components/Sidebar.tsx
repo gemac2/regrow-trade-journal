@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import { authClient } from '@/app/lib/auth';
 import { useAccount } from '@/app/context/AccountContext';
-import { useAuth } from '@/app/hooks/useAuth'; // Usamos el hook de auth para datos del usuario
+import { useAuth } from '@/app/hooks/useAuth';
 import { 
   LayoutDashboard, 
   ListOrdered, 
@@ -16,23 +16,26 @@ import {
   PlusCircle, 
   Wallet,
   Check,
-  Settings
+  Settings,
+  X // Importamos icono de cerrar para móvil
 } from 'lucide-react';
 import { Logo } from './Logo'; 
 import { CreateAccountModal } from './CreateAccountModal';
 
-export function Sidebar() {
+// Definimos las props para controlar el estado en móvil
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  
-  // Obtenemos datos del usuario desde el hook
   const { user } = useAuth();
-  
   const { accounts, selectedAccount, switchAccount } = useAccount();
   
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const menuItems = [
@@ -40,6 +43,12 @@ export function Sidebar() {
     { name: 'Trades', path: '/trades', icon: ListOrdered },
   ];
 
+  // Cerrar el menú automáticamente cuando cambiamos de página en móvil
+  useEffect(() => {
+    onClose();
+  }, [pathname]);
+
+  // Cerrar dropdown de cuentas si clicamos fuera
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -56,14 +65,32 @@ export function Sidebar() {
   };
 
   return (
-    <> 
-      <aside className="fixed left-0 top-0 h-screen w-64 bg-[#0B0E11] border-r border-gray-800 flex flex-col z-40">
+    <>
+      {/* 0. OVERLAY OSCURO (Solo visible en móvil cuando el menú está abierto) */}
+      {isOpen && (
+        <div 
+          onClick={onClose}
+          className="fixed inset-0 bg-black/80 z-40 md:hidden backdrop-blur-sm transition-opacity"
+        />
+      )}
+
+      {/* ASIDE PRINCIPAL CON TRANSICIÓN PARA MÓVIL */}
+      <aside className={`
+        fixed left-0 top-0 h-screen w-64 bg-[#0B0E11] border-r border-gray-800 flex flex-col z-50
+        transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
+        md:translate-x-0 
+      `}>
         
         {/* 1. LOGO AREA */}
-        <div className="h-20 flex items-center justify-center border-b border-gray-800/50">
-            <div className="scale-75">
+        <div className="h-20 flex items-center justify-between px-6 border-b border-gray-800/50 relative">
+            <div className="scale-75 origin-left">
                 <Logo /> 
             </div>
+            {/* Botón Cerrar (Solo visible en móvil) */}
+            <button onClick={onClose} className="md:hidden text-gray-500 hover:text-white">
+              <X size={24} />
+            </button>
         </div>
 
         {/* 2. ACCOUNT SELECTOR */}
@@ -155,12 +182,10 @@ export function Sidebar() {
             })}
         </nav>
 
-        {/* 4. USER PROFILE SECTION (NUEVO DISEÑO) */}
+        {/* 4. USER PROFILE SECTION */}
         <div className="p-4 border-t border-gray-800 bg-[#0d1116]">
-            
             {user ? (
                 <div className="relative group">
-                    {/* Profile Link */}
                     <Link href="/profile" className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#1e2329] transition-colors w-full text-left mb-1">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00FF7F] to-[#00A3FF] p-[1px]">
                             <div className="w-full h-full rounded-full bg-[#0b0e11] flex items-center justify-center overflow-hidden">
@@ -171,16 +196,12 @@ export function Sidebar() {
                                  )}
                             </div>
                         </div>
-                        
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-white truncate">{user.name}</p>
                             <p className="text-[10px] text-gray-500 truncate uppercase tracking-wider font-bold">Pro Trader</p>
                         </div>
-
                         <Settings size={16} className="text-gray-600 group-hover:text-[#00FF7F] transition-colors" />
                     </Link>
-
-                    {/* Logout Button */}
                     <button 
                         onClick={handleLogout}
                         className="w-full flex items-center justify-center gap-2 text-xs text-gray-500 hover:text-red-400 py-2 hover:bg-red-500/10 rounded-lg transition-colors"
@@ -189,7 +210,6 @@ export function Sidebar() {
                     </button>
                 </div>
             ) : (
-                // Loading Skeleton
                 <div className="flex items-center gap-3 p-3 animate-pulse">
                     <div className="w-10 h-10 rounded-full bg-gray-800"></div>
                     <div className="flex-1 space-y-2">
@@ -198,7 +218,6 @@ export function Sidebar() {
                     </div>
                 </div>
             )}
-
         </div>
       </aside>
 
