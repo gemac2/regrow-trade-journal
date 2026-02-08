@@ -204,15 +204,15 @@ export default function TradesPage() {
                         )}
                     </td>
 
-                    <td className="px-6 py-4 font-mono text-gray-300">${Number(trade.entryPrice).toFixed(2)}</td>
+                    <td className="px-6 py-4 font-mono text-gray-300">${Number(trade.entryPrice).toFixed(4)}</td>
                     <td className="px-6 py-4 font-mono">{Number(trade.size).toFixed(3)}</td>
                     <td className="px-6 py-4 font-mono text-gray-300">
-                      {trade.exitPrice ? `$${Number(trade.exitPrice).toFixed(2)}` : '-'}
+                      {trade.exitPrice ? `$${Number(trade.exitPrice).toFixed(4)}` : '-'}
                     </td>
                     <td className={`px-6 py-4 font-mono font-bold ${
                       Number(trade.pnl) > 0 ? 'text-[#00FF7F]' : Number(trade.pnl) < 0 ? 'text-red-400' : 'text-gray-500'
                     }`}>
-                      {trade.pnl ? `${Number(trade.pnl) > 0 ? '+' : ''}$${Number(trade.pnl).toFixed(2)}` : 'OPEN'}
+                      {trade.pnl ? `${Number(trade.pnl) > 0 ? '+' : ''}$${Number(trade.pnl).toFixed(4)}` : 'OPEN'}
                     </td>
                     <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
                       <button 
