@@ -4,11 +4,12 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
 import { useAccount } from '@/app/context/AccountContext';
-import { getStats, getCalendarData } from '@/app/actions'; // <--- 1. IMPORTAR getCalendarData
-import { Loader2, TrendingUp, TrendingDown, Activity, Wallet, Pencil } from 'lucide-react'; 
+import { getStats, getCalendarData, getStrategyStats } from '@/app/actions'; // <--- 1. IMPORTAR getStrategyStats
+import { Loader2, TrendingUp, TrendingDown, Activity, Wallet, Pencil, PieChart as PieIcon } from 'lucide-react'; 
 import { GrowthChart } from '@/components/GrowthChart';
 import { SettingsModal } from '@/components/SettingsModal'; 
-import { PnLCalendar } from '@/components/PnLCalendar'; // <--- 2. IMPORTAR PnLCalendar
+import { PnLCalendar } from '@/components/PnLCalendar'; 
+import { StrategyDonut } from '@/components/StrategyDonut'; // <--- 2. IMPORTAR StrategyDonut
 
 interface DashboardStats {
   netPnL: string;
@@ -37,8 +38,9 @@ export default function DashboardPage() {
     chartData: []
   });
 
-  // 3. NUEVO ESTADO PARA EL CALENDARIO
   const [calendarData, setCalendarData] = useState<any[]>([]);
+  // 3. NUEVO ESTADO PARA ESTRATEGIAS
+  const [strategyData, setStrategyData] = useState<any[]>([]);
 
   useEffect(() => {
     if (user && selectedAccount) {
@@ -49,10 +51,11 @@ export default function DashboardPage() {
   async function loadData(userId: string, accountId: number) {
     setLoading(true);
     
-    // 4. CARGA EN PARALELO (Stats + Calendar)
-    const [statsRes, calendarRes] = await Promise.all([
+    // 4. CARGA EN PARALELO (Stats + Calendar + Strategies)
+    const [statsRes, calendarRes, strategyRes] = await Promise.all([
       getStats(userId, accountId),
-      getCalendarData(userId, accountId)
+      getCalendarData(userId, accountId),
+      getStrategyStats(userId, accountId) // <--- LLAMADA A LA ACCIÓN
     ]);
     
     // Procesar Stats
@@ -74,6 +77,11 @@ export default function DashboardPage() {
         setCalendarData(calendarRes.data as any[]);
     }
 
+    // Procesar Estrategias
+    if (strategyRes.success && strategyRes.data) {
+        setStrategyData(strategyRes.data as any[]);
+    }
+
     setLoading(false);
   }
 
@@ -88,18 +96,18 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* Top Section */}
+      {/* --- HEADER --- */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center gap-2">
             {selectedAccount.name} <span className="text-gray-600 text-lg font-normal">Dashboard</span>
           </h1>
-          <p className="text-gray-400">Welcome back, trader. Here is your performance.</p>
+          <p className="text-gray-400">Welcome back, trader.</p>
         </div>
         
-        <div className="bg-gradient-to-r from-[#1e2329] to-[#0b0e11] border border-gray-800 p-4 rounded-xl flex flex-col items-end min-w-[220px] relative group">
+        <div className="bg-[#1e2329] border border-gray-800 p-4 rounded-xl flex flex-col items-end min-w-[220px] relative group hover:border-gray-700 transition">
             <div className="flex items-center gap-2 mb-1">
                 <span className="text-gray-400 text-xs uppercase tracking-wider font-bold">Current Balance</span>
                 <button 
@@ -125,81 +133,99 @@ export default function DashboardPage() {
         </div>
       </div>
 
-       {/* Metrics Grid */}
-       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-[#1e2329] p-6 rounded-2xl border border-gray-800 relative overflow-hidden group hover:border-gray-700 transition">
-            <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-3xl -mr-10 -mt-10 transition opacity-20 ${Number(stats.netPnL) >= 0 ? 'bg-[#00FF7F]' : 'bg-red-500'}`}></div>
+       {/* --- METRICS GRID --- */}
+       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-[#1e2329] p-5 rounded-2xl border border-gray-800 relative overflow-hidden group hover:border-gray-700 transition">
+            <div className={`absolute top-0 right-0 w-20 h-20 rounded-full blur-3xl -mr-10 -mt-10 transition opacity-20 ${Number(stats.netPnL) >= 0 ? 'bg-[#00FF7F]' : 'bg-red-500'}`}></div>
             <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-[#0b0e11] rounded-lg text-gray-400"><Wallet size={20} /></div>
-                <h3 className="text-gray-400 text-sm font-medium relative z-10">Net PnL</h3>
+                <div className="p-2 bg-[#0b0e11] rounded-lg text-gray-400"><Wallet size={18} /></div>
+                <h3 className="text-gray-400 text-xs font-bold uppercase">Net PnL</h3>
             </div>
-            <p className={`text-3xl font-mono font-bold relative z-10 ${pnlColor}`}>
+            <p className={`text-2xl font-mono font-bold relative z-10 ${pnlColor}`}>
                 {Number(stats.netPnL) > 0 ? '+' : ''}${stats.netPnL}
             </p>
           </div>
 
-          <div className="bg-[#1e2329] p-6 rounded-2xl border border-gray-800 hover:border-gray-700 transition">
-            <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-[#0b0e11] rounded-lg text-gray-400"><Activity size={20} /></div>
-                <h3 className="text-gray-400 text-sm font-medium">Win Rate</h3>
-            </div>
-            <p className={`text-3xl font-mono font-bold ${Number(stats.winRate) >= 50 ? 'text-white' : 'text-yellow-500'}`}>
+          <div className="bg-[#1e2329] p-5 rounded-2xl border border-gray-800 hover:border-gray-700 transition">
+             <div className="flex items-center gap-3 mb-2">
+                 <div className="p-2 bg-[#0b0e11] rounded-lg text-gray-400"><Activity size={18} /></div>
+                 <h3 className="text-gray-400 text-xs font-bold uppercase">Win Rate</h3>
+             </div>
+             <p className={`text-2xl font-mono font-bold ${Number(stats.winRate) >= 50 ? 'text-white' : 'text-yellow-500'}`}>
                 {stats.winRate}%
-            </p>
+             </p>
           </div>
 
-          <div className="bg-[#1e2329] p-6 rounded-2xl border border-gray-800 hover:border-gray-700 transition">
-            <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-[#0b0e11] rounded-lg text-gray-400"><TrendingUp size={20} /></div>
-                <h3 className="text-gray-400 text-sm font-medium">Profit Factor</h3>
-            </div>
-            <p className="text-3xl font-mono font-bold text-white">{stats.profitFactor}</p>
+          <div className="bg-[#1e2329] p-5 rounded-2xl border border-gray-800 hover:border-gray-700 transition">
+             <div className="flex items-center gap-3 mb-2">
+                 <div className="p-2 bg-[#0b0e11] rounded-lg text-gray-400"><TrendingUp size={18} /></div>
+                 <h3 className="text-gray-400 text-xs font-bold uppercase">Profit Factor</h3>
+             </div>
+             <p className="text-2xl font-mono font-bold text-white">{stats.profitFactor}</p>
           </div>
 
-          <div className="bg-[#1e2329] p-6 rounded-2xl border border-gray-800 hover:border-gray-700 transition">
-            <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-[#0b0e11] rounded-lg text-gray-400"><TrendingDown size={20} /></div>
-                <h3 className="text-gray-400 text-sm font-medium">Total Trades</h3>
-            </div>
-            <p className="text-3xl font-mono font-bold text-white">{stats.totalTrades}</p>
+          <div className="bg-[#1e2329] p-5 rounded-2xl border border-gray-800 hover:border-gray-700 transition">
+             <div className="flex items-center gap-3 mb-2">
+                 <div className="p-2 bg-[#0b0e11] rounded-lg text-gray-400"><TrendingDown size={18} /></div>
+                 <h3 className="text-gray-400 text-xs font-bold uppercase">Total Trades</h3>
+             </div>
+             <p className="text-2xl font-mono font-bold text-white">{stats.totalTrades}</p>
           </div>
        </div>
 
-       {/* --- CHART & CALENDAR SECTION (NUEVO LAYOUT) --- */}
+       {/* --- CHARTS ROW (Growth + Strategies) --- */}
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
            
-           {/* Chart ocupa 2 columnas */}
-           <div className="lg:col-span-2 bg-[#1e2329] p-6 rounded-2xl border border-gray-800 shadow-xl h-full">
-               <div className="flex items-center justify-between mb-6">
+           {/* Growth Chart (2/3 de ancho) */}
+           <div className="lg:col-span-2 bg-[#1e2329] p-6 rounded-2xl border border-gray-800 shadow-xl h-[400px] flex flex-col">
+               <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-white">Account Growth</h3>
                   <div className="flex gap-2">
                       <button className="text-xs bg-[#0b0e11] text-white px-3 py-1 rounded hover:bg-gray-700">All Time</button>
                   </div>
                </div>
                
-               {loading ? (
-                   <div className="h-[350px] flex items-center justify-center">
-                       <Loader2 className="animate-spin text-gray-600" size={32} />
-                   </div>
-               ) : stats.chartData.length > 0 ? (
-                   <GrowthChart data={stats.chartData} />
-               ) : (
-                   <div className="h-[350px] flex flex-col items-center justify-center text-gray-500 border border-dashed border-gray-800 rounded-xl">
-                       <p>Not enough data to display chart yet.</p>
-                       <p className="text-xs">Close more trades to see your curve.</p>
-                   </div>
-               )}
+               <div className="flex-1 min-h-0">
+                  {loading ? (
+                       <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-gray-600" size={32} /></div>
+                  ) : stats.chartData.length > 0 ? (
+                       <GrowthChart data={stats.chartData} />
+                  ) : (
+                       <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-gray-800 rounded-xl">
+                           <p>Not enough data to display chart.</p>
+                       </div>
+                  )}
+               </div>
            </div>
 
-           {/* Calendario ocupa 1 columna */}
-           <div className="lg:col-span-1 h-full">
+           {/* Strategy Donut (1/3 de ancho) */}
+           <div className="lg:col-span-1 bg-[#1e2329] p-6 rounded-2xl border border-gray-800 shadow-xl h-[400px] flex flex-col">
+               <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <PieIcon size={18} className="text-gray-400" /> 
+                    Profit Source
+                  </h3>
+               </div>
+               <div className="flex-1 min-h-0">
+                   {loading ? (
+                        <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-gray-600" size={32} /></div>
+                   ) : (
+                        <StrategyDonut data={strategyData} />
+                   )}
+               </div>
+           </div>
+
+       </div>
+
+       {/* --- CALENDAR ROW (Full Width) --- */}
+       <div className="grid grid-cols-1">
+           <div className="h-auto">
                 {loading ? (
-                    <div className="h-[400px] bg-[#1e2329] rounded-2xl border border-gray-800 animate-pulse" />
+                    <div className="h-[300px] bg-[#1e2329] rounded-2xl border border-gray-800 animate-pulse" />
                 ) : (
                     <PnLCalendar data={calendarData} />
                 )}
            </div>
-
        </div>
 
       {user && selectedAccount && (

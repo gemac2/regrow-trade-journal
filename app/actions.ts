@@ -306,3 +306,53 @@ export async function getCalendarData(userId: string, accountId: number) {
     return { success: false, data: [] };
   }
 }
+
+// 9. Get Strategy Stats (Profit Distribution)
+export async function getStrategyStats(userId: string, accountId: number) {
+  try {
+    // 1. Traemos trades CERRADOS y GANADORES (PnL > 0) que tengan estrategia definida
+    const winningTrades = await db.select({
+      strategy: trades.strategy,
+      pnl: trades.pnl
+    })
+    .from(trades)
+    .where(and(
+      eq(trades.userId, userId),
+      eq(trades.accountId, accountId),
+      isNotNull(trades.pnl),
+      isNotNull(trades.strategy)
+    ));
+
+    // 2. Agrupamos y sumamos
+    const strategyMap: Record<string, number> = {};
+    let totalGrossProfit = 0;
+
+    winningTrades.forEach(t => {
+      const pnl = Number(t.pnl);
+      if (pnl <= 0) return; // Solo nos interesan las ganancias para este gráfico
+      
+      const strat = t.strategy || "Unknown";
+      
+      if (!strategyMap[strat]) {
+        strategyMap[strat] = 0;
+      }
+      strategyMap[strat] += pnl;
+      totalGrossProfit += pnl;
+    });
+
+    // 3. Formatear para Recharts
+    // Formato: [{ name: 'Scalping', value: 500 }, ...]
+    const result = Object.entries(strategyMap)
+      .map(([name, value]) => ({
+        name,
+        value: Number(value.toFixed(2))
+      }))
+      .sort((a, b) => b.value - a.value); // Ordenar de mayor a menor ganancia
+
+    return { success: true, data: result };
+
+  } catch (error) {
+    console.error("Strategy stats error:", error);
+    return { success: false, data: [] };
+  }
+}
