@@ -6,34 +6,38 @@ import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import { authClient } from '@/app/lib/auth';
 import { useAccount } from '@/app/context/AccountContext';
+import { useAuth } from '@/app/hooks/useAuth'; // Usamos el hook de auth para datos del usuario
 import { 
   LayoutDashboard, 
-  Table2, 
+  ListOrdered, 
   LogOut, 
-  UserCircle, 
+  User, 
   ChevronDown, 
   PlusCircle, 
   Wallet,
-  Check
+  Check,
+  Settings
 } from 'lucide-react';
 import { Logo } from './Logo'; 
-import { CreateAccountModal } from './CreateAccountModal'; // <--- 1. IMPORTAR
+import { CreateAccountModal } from './CreateAccountModal';
 
-export function Sidebar({ userEmail }: { userEmail?: string }) {
+export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   
-  const { accounts, selectedAccount, switchAccount } = useAccount(); // Ya no necesitamos createNewAccount aquí directo
+  // Obtenemos datos del usuario desde el hook
+  const { user } = useAuth();
+  
+  const { accounts, selectedAccount, switchAccount } = useAccount();
   
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
-  // 2. NUEVO ESTADO PARA EL MODAL
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Trades', path: '/trades', icon: Table2 },
+    { name: 'Trades', path: '/trades', icon: ListOrdered },
   ];
 
   useEffect(() => {
@@ -46,20 +50,23 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleLogout = async () => {
+    await authClient.signOut();
+    router.push('/login');
+  };
+
   return (
     <> 
-      {/* Envolvemos en Fragment para poner el Modal al mismo nivel que el aside */}
-      
       <aside className="fixed left-0 top-0 h-screen w-64 bg-[#0B0E11] border-r border-gray-800 flex flex-col z-40">
         
-        {/* LOGO AREA */}
+        {/* 1. LOGO AREA */}
         <div className="h-20 flex items-center justify-center border-b border-gray-800/50">
             <div className="scale-75">
                 <Logo /> 
             </div>
         </div>
 
-        {/* ACCOUNT SELECTOR */}
+        {/* 2. ACCOUNT SELECTOR */}
         <div className="px-3 pt-6 pb-2" ref={dropdownRef}>
             <div className="relative">
             <button 
@@ -106,8 +113,8 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
                 <div className="border-t border-gray-700 p-1">
                     <button
                         onClick={() => {
-                            setIsDropdownOpen(false); // Cerramos dropdown
-                            setIsCreateModalOpen(true); // 3. ABRIMOS MODAL
+                            setIsDropdownOpen(false);
+                            setIsCreateModalOpen(true);
                         }}
                         className="w-full text-left px-3 py-2 text-xs font-bold text-[#00A3FF] hover:bg-[#00A3FF]/10 rounded-lg flex items-center justify-center gap-2 transition"
                     >
@@ -119,11 +126,12 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
             </div>
         </div>
 
-        {/* NAVIGATION */}
+        {/* 3. NAVIGATION MENU */}
         <nav className="flex-1 px-3 space-y-1 mt-2">
             <p className="px-4 py-2 text-xs font-bold text-gray-600 uppercase tracking-wider">Menu</p>
             {menuItems.map((item) => {
             const isActive = pathname === item.path;
+            const Icon = item.icon;
             return (
                 <Link
                 key={item.path}
@@ -134,41 +142,66 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
                     : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
                 }`}
                 >
-                <item.icon 
+                <Icon 
                     size={20} 
                     className={isActive ? 'text-[#00FF7F]' : 'text-gray-500 group-hover:text-white'} 
                 />
                 <span className="font-medium">{item.name}</span>
+                {isActive && (
+                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#00FF7F] shadow-[0_0_5px_#00FF7F]"></div>
+                )}
                 </Link>
             );
             })}
         </nav>
 
-        {/* USER & LOGOUT */}
+        {/* 4. USER PROFILE SECTION (NUEVO DISEÑO) */}
         <div className="p-4 border-t border-gray-800 bg-[#0d1116]">
-            <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#00FF7F] to-[#00A3FF] flex items-center justify-center text-black font-bold shadow-lg shadow-blue-500/20">
-                <UserCircle size={22} />
-            </div>
-            <div className="overflow-hidden">
-                <p className="text-sm font-medium text-white truncate w-32">{userEmail || 'Trader'}</p>
-                <p className="text-xs text-gray-500">Pro Plan</p>
-            </div>
-            </div>
+            
+            {user ? (
+                <div className="relative group">
+                    {/* Profile Link */}
+                    <Link href="/profile" className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#1e2329] transition-colors w-full text-left mb-1">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00FF7F] to-[#00A3FF] p-[1px]">
+                            <div className="w-full h-full rounded-full bg-[#0b0e11] flex items-center justify-center overflow-hidden">
+                                 {user.image ? (
+                                    <img src={user.image} alt="User" className="w-full h-full object-cover" />
+                                 ) : (
+                                    <User size={18} className="text-gray-400" />
+                                 )}
+                            </div>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-white truncate">{user.name}</p>
+                            <p className="text-[10px] text-gray-500 truncate uppercase tracking-wider font-bold">Pro Trader</p>
+                        </div>
 
-            <button
-            onClick={async () => {
-                await authClient.signOut();
-                router.push('/login');
-            }}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition text-sm font-medium"
-            >
-            <LogOut size={16} /> Log Out
-            </button>
+                        <Settings size={16} className="text-gray-600 group-hover:text-[#00FF7F] transition-colors" />
+                    </Link>
+
+                    {/* Logout Button */}
+                    <button 
+                        onClick={handleLogout}
+                        className="w-full flex items-center justify-center gap-2 text-xs text-gray-500 hover:text-red-400 py-2 hover:bg-red-500/10 rounded-lg transition-colors"
+                    >
+                        <LogOut size={14} /> Log Out
+                    </button>
+                </div>
+            ) : (
+                // Loading Skeleton
+                <div className="flex items-center gap-3 p-3 animate-pulse">
+                    <div className="w-10 h-10 rounded-full bg-gray-800"></div>
+                    <div className="flex-1 space-y-2">
+                        <div className="h-3 w-20 bg-gray-800 rounded"></div>
+                        <div className="h-2 w-12 bg-gray-800 rounded"></div>
+                    </div>
+                </div>
+            )}
+
         </div>
       </aside>
 
-      {/* 4. RENDERIZAMOS EL MODAL AQUÍ */}
       <CreateAccountModal 
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 

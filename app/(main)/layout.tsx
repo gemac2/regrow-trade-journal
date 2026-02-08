@@ -29,7 +29,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <OnboardingModal />
 
         {/* Sidebar fijo a la izquierda */}
-        <Sidebar userEmail={user?.email} />
+        <Sidebar/>
         
         {/* Contenido principal a la derecha */}
         <main className="flex-1 ml-64 p-8 overflow-y-auto h-screen">

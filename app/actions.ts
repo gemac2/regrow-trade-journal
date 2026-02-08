@@ -2,13 +2,13 @@
 'use server';
 
 import { db } from '@/app/lib/db';
-import { trades, accounts } from '@/db/schema';
+// CORRECCIÓN: Quitamos 'user' de los imports. Solo usamos tus tablas de negocio.
+import { trades, accounts, userProfiles } from '@/db/schema';
 import { desc, eq, and, isNotNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 // --- ACCOUNT ACTIONS ---
 
-// 1. Get all accounts for a user
 export async function getAccounts(userId: string) {
   try {
     const data = await db.select().from(accounts).where(eq(accounts.userId, userId));
@@ -18,7 +18,6 @@ export async function getAccounts(userId: string) {
   }
 }
 
-// 2. Create a new account
 export async function createAccount(userId: string, name: string, balance: string) {
   try {
     const [newAcc] = await db.insert(accounts).values({
@@ -36,7 +35,6 @@ export async function createAccount(userId: string, name: string, balance: strin
 
 // --- TRADE ACTIONS ---
 
-// 3. Get Trades (Filtered by Account ID & User ID)
 export async function getTrades(userId: string, accountId: number) {
   try {
     const data = await db.select().from(trades)
@@ -48,7 +46,6 @@ export async function getTrades(userId: string, accountId: number) {
   }
 }
 
-// 4. Create Trade (WITH STRATEGY)
 export async function createTrade(formData: FormData) {
   const userId = formData.get('userId') as string;
   const accountId = Number(formData.get('accountId'));
@@ -64,7 +61,7 @@ export async function createTrade(formData: FormData) {
 
   let pnl = null;
   let status = 'OPEN';
-  let exitDate = null; // Variable para la fecha
+  let exitDate = null;
 
   if (exitPrice) {
     const entry = parseFloat(entryPrice);
@@ -76,7 +73,7 @@ export async function createTrade(formData: FormData) {
     else if (pnl < 0) status = 'LOSS';
     else status = 'BREAKEVEN';
 
-    exitDate = new Date(); // <--- AQUÍ GUARDAMOS LA FECHA DE CIERRE
+    exitDate = new Date();
   }
 
   try {
@@ -93,7 +90,7 @@ export async function createTrade(formData: FormData) {
       stopLoss,
       takeProfit,
       status,
-      exitDate, // <--- NO OLVIDES AGREGAR ESTO
+      exitDate,
     });
     revalidatePath('/');
     return { success: true };
@@ -103,7 +100,6 @@ export async function createTrade(formData: FormData) {
   }
 }
 
-// 5. Update Trade (CORREGIDO: Guarda exitDate)
 export async function updateTrade(formData: FormData) {
     const id = Number(formData.get('tradeId'));
     const symbol = formData.get('symbol') as string;
@@ -120,9 +116,6 @@ export async function updateTrade(formData: FormData) {
     let status = 'OPEN';
     let exitDate = null;
 
-    // Nota: Si ya tenía fecha de cierre, idealmente no la sobrescribimos, 
-    // pero si estamos "cerrando" el trade ahora, ponemos la fecha actual.
-    // Para simplificar, si hay exitPrice, actualizamos la fecha.
     if (exitPrice) {
       const entry = parseFloat(entryPrice);
       const exit = parseFloat(exitPrice);
@@ -134,11 +127,10 @@ export async function updateTrade(formData: FormData) {
       else if (pnl < 0) status = 'LOSS';
       else status = 'BREAKEVEN';
 
-      exitDate = new Date(); // <--- GUARDAR FECHA AL ACTUALIZAR/CERRAR
+      exitDate = new Date();
     }
   
     try {
-      // Preparamos el objeto de actualización
       const updateData: any = {
         symbol: symbol.toUpperCase(),
         type,
@@ -152,7 +144,6 @@ export async function updateTrade(formData: FormData) {
         status,
       };
 
-      // Solo actualizamos la fecha si se está cerrando (para no borrar fechas antiguas si editas otra cosa)
       if (exitDate) {
          updateData.exitDate = exitDate;
       }
@@ -177,10 +168,9 @@ export async function deleteTrade(id: number) {
     }
 }
 
-// 6. Get Stats (SECURED)
+// 6. Get Stats
 export async function getStats(userId: string, accountId: number) {
   try {
-    // A. Get Account Balance SECURELY
     const [account] = await db.select().from(accounts)
       .where(and(
         eq(accounts.id, accountId), 
@@ -191,12 +181,10 @@ export async function getStats(userId: string, accountId: number) {
     
     const initialBalance = Number(account.initialBalance);
 
-    // B. Get Trades for THIS account
     const closedTrades = await db.select().from(trades)
       .where(and(eq(trades.userId, userId), eq(trades.accountId, accountId), isNotNull(trades.exitPrice)))
       .orderBy(trades.exitDate);
 
-    // C. Calculate Metrics
     let netPnL = 0;
     let grossProfit = 0;
     let grossLoss = 0;
@@ -244,7 +232,6 @@ export async function getStats(userId: string, accountId: number) {
   }
 }
 
-// 7. Update Initial Balance (Secured)
 export async function updateInitialBalance(userId: string, accountId: number, newBalance: string) {
   try {
     await db.update(accounts)
@@ -259,10 +246,8 @@ export async function updateInitialBalance(userId: string, accountId: number, ne
   }
 }
 
-// 8. Get Calendar Data (FIXED & ROBUST)
 export async function getCalendarData(userId: string, accountId: number) {
   try {
-    // 1. Traemos trades cerrados con validaciones estrictas
     const closedTrades = await db.select({
       exitDate: trades.exitDate,
       pnl: trades.pnl
@@ -272,28 +257,18 @@ export async function getCalendarData(userId: string, accountId: number) {
       eq(trades.userId, userId),
       eq(trades.accountId, accountId),
       isNotNull(trades.exitDate),
-      isNotNull(trades.pnl) // Asegurar que tenga PnL calculado
+      isNotNull(trades.pnl)
     ));
 
-    console.log(`[Calendar] Found ${closedTrades.length} closed trades for Account ${accountId}`);
-
-    // 2. Agrupamos por día
     const dailyData: Record<string, number> = {};
 
     closedTrades.forEach(trade => {
       if (!trade.exitDate) return;
-      
-      // Convertimos a YYYY-MM-DD
       const dateKey = new Date(trade.exitDate).toISOString().split('T')[0];
-      
-      if (!dailyData[dateKey]) {
-        dailyData[dateKey] = 0;
-      }
-      // Sumamos el PnL asegurando que sea numérico
+      if (!dailyData[dateKey]) dailyData[dateKey] = 0;
       dailyData[dateKey] += Number(trade.pnl);
     });
 
-    // 3. Convertimos a array
     const result = Object.entries(dailyData).map(([date, pnl]) => ({
       date,
       pnl
@@ -307,10 +282,8 @@ export async function getCalendarData(userId: string, accountId: number) {
   }
 }
 
-// 9. Get Strategy Stats (Profit Distribution)
 export async function getStrategyStats(userId: string, accountId: number) {
   try {
-    // 1. Traemos trades CERRADOS y GANADORES (PnL > 0) que tengan estrategia definida
     const winningTrades = await db.select({
       strategy: trades.strategy,
       pnl: trades.pnl
@@ -323,36 +296,84 @@ export async function getStrategyStats(userId: string, accountId: number) {
       isNotNull(trades.strategy)
     ));
 
-    // 2. Agrupamos y sumamos
     const strategyMap: Record<string, number> = {};
-    let totalGrossProfit = 0;
 
     winningTrades.forEach(t => {
       const pnl = Number(t.pnl);
-      if (pnl <= 0) return; // Solo nos interesan las ganancias para este gráfico
-      
+      if (pnl <= 0) return; 
       const strat = t.strategy || "Unknown";
-      
-      if (!strategyMap[strat]) {
-        strategyMap[strat] = 0;
-      }
+      if (!strategyMap[strat]) strategyMap[strat] = 0;
       strategyMap[strat] += pnl;
-      totalGrossProfit += pnl;
     });
 
-    // 3. Formatear para Recharts
-    // Formato: [{ name: 'Scalping', value: 500 }, ...]
     const result = Object.entries(strategyMap)
       .map(([name, value]) => ({
         name,
         value: Number(value.toFixed(2))
       }))
-      .sort((a, b) => b.value - a.value); // Ordenar de mayor a menor ganancia
+      .sort((a, b) => b.value - a.value);
 
     return { success: true, data: result };
 
   } catch (error) {
     console.error("Strategy stats error:", error);
     return { success: false, data: [] };
+  }
+}
+
+// --- PROFILE ACTIONS (SIN TABLA USER) ---
+
+// 10. Get User Profile (SOLO PERFIL EXTENDIDO)
+export async function getUserProfile(userId: string) {
+  try {
+    // Solo consultamos userProfiles. 
+    // El nombre y email los debes sacar de useAuth() en el cliente.
+    const [profile] = await db.select().from(userProfiles)
+      .where(eq(userProfiles.userId, userId));
+
+    // Devolvemos lo que encontramos (o null si es nuevo)
+    // El cliente mezclará esto con los datos de la sesión.
+    if (!profile) return { success: false, data: null };
+
+    return { success: true, data: profile };
+  } catch (error) {
+    console.error("Get profile error:", error);
+    return { success: false, data: null };
+  }
+}
+
+// 11. Update User Profile (SOLO PERFIL EXTENDIDO)
+export async function updateUserProfile(formData: FormData) {
+  const userId = formData.get('userId') as string;
+  // Nota: Ya no actualizamos el 'name' aquí porque está en la tabla 'user' que no importamos.
+  // Si quieres cambiar el nombre, usa authClient.updateUser() en el cliente.
+  const bio = formData.get('bio') as string;
+  const tradingStyle = formData.get('tradingStyle') as string;
+  const location = formData.get('location') as string;
+
+  try {
+    // Solo hacemos Upsert en userProfiles
+    await db.insert(userProfiles).values({
+      userId: userId,
+      bio,
+      tradingStyle,
+      location,
+      updatedAt: new Date()
+    })
+    .onConflictDoUpdate({
+      target: userProfiles.userId,
+      set: {
+        bio,
+        tradingStyle,
+        location,
+        updatedAt: new Date()
+      }
+    });
+
+    revalidatePath('/profile');
+    return { success: true };
+  } catch (error) {
+    console.error("Update profile error:", error);
+    return { success: false, error: "Failed to update profile" };
   }
 }
