@@ -48,35 +48,35 @@ export async function getTrades(userId: string, accountId: number) {
   }
 }
 
-// 4. Create Trade (UPDATED WITH STRATEGY)
+// 4. Create Trade (WITH STRATEGY)
 export async function createTrade(formData: FormData) {
   const userId = formData.get('userId') as string;
   const accountId = Number(formData.get('accountId'));
   const symbol = formData.get('symbol') as string;
   const type = formData.get('type') as string;
-  const strategy = formData.get('strategy') as string || null; // <--- NUEVO: Capturar estrategia
+  const strategy = formData.get('strategy') as string || null;
   const entryPrice = formData.get('entryPrice') as string;
   const size = formData.get('size') as string;
   
-  // Optional fields
   const exitPrice = formData.get('exitPrice') as string || null;
   const stopLoss = formData.get('stopLoss') as string || null;
   const takeProfit = formData.get('takeProfit') as string || null;
 
   let pnl = null;
   let status = 'OPEN';
+  let exitDate = null; // Variable para la fecha
 
   if (exitPrice) {
     const entry = parseFloat(entryPrice);
     const exit = parseFloat(exitPrice);
     const positionSize = parseFloat(size);
-    // PnL Formula: (Exit - Entry) * Size * (1 if Long, -1 if Short)
     pnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
     
-    // Determine Status
     if (pnl > 0) status = 'WIN';
     else if (pnl < 0) status = 'LOSS';
     else status = 'BREAKEVEN';
+
+    exitDate = new Date(); // <--- AQUÍ GUARDAMOS LA FECHA DE CIERRE
   }
 
   try {
@@ -85,7 +85,7 @@ export async function createTrade(formData: FormData) {
       accountId,
       symbol: symbol.toUpperCase(),
       type,
-      strategy, // <--- NUEVO: Guardar estrategia
+      strategy,
       entryPrice,
       exitPrice,
       size,
@@ -93,6 +93,7 @@ export async function createTrade(formData: FormData) {
       stopLoss,
       takeProfit,
       status,
+      exitDate, // <--- NO OLVIDES AGREGAR ESTO
     });
     revalidatePath('/');
     return { success: true };
@@ -102,23 +103,26 @@ export async function createTrade(formData: FormData) {
   }
 }
 
-// 5. Update Trade (UPDATED WITH STRATEGY)
+// 5. Update Trade (CORREGIDO: Guarda exitDate)
 export async function updateTrade(formData: FormData) {
     const id = Number(formData.get('tradeId'));
     const symbol = formData.get('symbol') as string;
     const type = formData.get('type') as string;
-    const strategy = formData.get('strategy') as string || null; // <--- NUEVO: Capturar estrategia
+    const strategy = formData.get('strategy') as string || null;
     const entryPrice = formData.get('entryPrice') as string;
     const size = formData.get('size') as string;
     
-    // Optional fields
     const exitPrice = formData.get('exitPrice') as string || null;
     const stopLoss = formData.get('stopLoss') as string || null;
     const takeProfit = formData.get('takeProfit') as string || null;
     
     let pnl = null;
     let status = 'OPEN';
-  
+    let exitDate = null;
+
+    // Nota: Si ya tenía fecha de cierre, idealmente no la sobrescribimos, 
+    // pero si estamos "cerrando" el trade ahora, ponemos la fecha actual.
+    // Para simplificar, si hay exitPrice, actualizamos la fecha.
     if (exitPrice) {
       const entry = parseFloat(entryPrice);
       const exit = parseFloat(exitPrice);
@@ -129,13 +133,16 @@ export async function updateTrade(formData: FormData) {
       if (pnl > 0) status = 'WIN';
       else if (pnl < 0) status = 'LOSS';
       else status = 'BREAKEVEN';
+
+      exitDate = new Date(); // <--- GUARDAR FECHA AL ACTUALIZAR/CERRAR
     }
   
     try {
-      await db.update(trades).set({
+      // Preparamos el objeto de actualización
+      const updateData: any = {
         symbol: symbol.toUpperCase(),
         type,
-        strategy, // <--- NUEVO: Actualizar estrategia
+        strategy,
         entryPrice,
         exitPrice,
         size,
@@ -143,7 +150,14 @@ export async function updateTrade(formData: FormData) {
         stopLoss,
         takeProfit,
         status,
-      }).where(eq(trades.id, id));
+      };
+
+      // Solo actualizamos la fecha si se está cerrando (para no borrar fechas antiguas si editas otra cosa)
+      if (exitDate) {
+         updateData.exitDate = exitDate;
+      }
+
+      await db.update(trades).set(updateData).where(eq(trades.id, id));
   
       revalidatePath('/');
       return { success: true };
@@ -151,7 +165,7 @@ export async function updateTrade(formData: FormData) {
       console.error('Error updating trade:', error);
       return { success: false, error: 'Failed to update trade' };
     }
-  }
+}
 
 export async function deleteTrade(id: number) {
     try {
@@ -242,5 +256,53 @@ export async function updateInitialBalance(userId: string, accountId: number, ne
   } catch (error) {
     console.error('Error updating balance:', error);
     return { success: false, error: 'Failed to update balance' };
+  }
+}
+
+// 8. Get Calendar Data (FIXED & ROBUST)
+export async function getCalendarData(userId: string, accountId: number) {
+  try {
+    // 1. Traemos trades cerrados con validaciones estrictas
+    const closedTrades = await db.select({
+      exitDate: trades.exitDate,
+      pnl: trades.pnl
+    })
+    .from(trades)
+    .where(and(
+      eq(trades.userId, userId),
+      eq(trades.accountId, accountId),
+      isNotNull(trades.exitDate),
+      isNotNull(trades.pnl) // Asegurar que tenga PnL calculado
+    ));
+
+    console.log(`[Calendar] Found ${closedTrades.length} closed trades for Account ${accountId}`);
+
+    // 2. Agrupamos por día
+    const dailyData: Record<string, number> = {};
+
+    closedTrades.forEach(trade => {
+      if (!trade.exitDate) return;
+      
+      // Convertimos a YYYY-MM-DD
+      const dateKey = new Date(trade.exitDate).toISOString().split('T')[0];
+      
+      if (!dailyData[dateKey]) {
+        dailyData[dateKey] = 0;
+      }
+      // Sumamos el PnL asegurando que sea numérico
+      dailyData[dateKey] += Number(trade.pnl);
+    });
+
+    // 3. Convertimos a array
+    const result = Object.entries(dailyData).map(([date, pnl]) => ({
+      date,
+      pnl
+    }));
+
+    return { success: true, data: result };
+
+  } catch (error) {
+    console.error("Calendar data error:", error);
+    return { success: false, data: [] };
   }
 }

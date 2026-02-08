@@ -3,13 +3,13 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
-import { useAccount } from '@/app/context/AccountContext'; // Importamos el Contexto
-import { getStats } from '@/app/actions';
+import { useAccount } from '@/app/context/AccountContext';
+import { getStats, getCalendarData } from '@/app/actions'; // <--- 1. IMPORTAR getCalendarData
 import { Loader2, TrendingUp, TrendingDown, Activity, Wallet, Pencil } from 'lucide-react'; 
 import { GrowthChart } from '@/components/GrowthChart';
 import { SettingsModal } from '@/components/SettingsModal'; 
+import { PnLCalendar } from '@/components/PnLCalendar'; // <--- 2. IMPORTAR PnLCalendar
 
-// Interface correcta
 interface DashboardStats {
   netPnL: string;
   winRate: string;
@@ -22,7 +22,7 @@ interface DashboardStats {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { selectedAccount, isLoading: isAccountLoading } = useAccount(); // Usamos el contexto de cuentas
+  const { selectedAccount, isLoading: isAccountLoading } = useAccount();
   
   const [loading, setLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -37,21 +37,27 @@ export default function DashboardPage() {
     chartData: []
   });
 
-  // Efecto: Cargar datos cuando cambia el usuario O la cuenta seleccionada
+  // 3. NUEVO ESTADO PARA EL CALENDARIO
+  const [calendarData, setCalendarData] = useState<any[]>([]);
+
   useEffect(() => {
     if (user && selectedAccount) {
-      loadStats(user.id, selectedAccount.id);
+      loadData(user.id, selectedAccount.id);
     }
   }, [user, selectedAccount]);
 
-  async function loadStats(userId: string, accountId: number) {
+  async function loadData(userId: string, accountId: number) {
     setLoading(true);
-    // Ahora pasamos el accountId a la función getStats
-    const { success, data } = await getStats(userId, accountId);
     
-    if (success && data) {
-      const backendData = data as any;
-      
+    // 4. CARGA EN PARALELO (Stats + Calendar)
+    const [statsRes, calendarRes] = await Promise.all([
+      getStats(userId, accountId),
+      getCalendarData(userId, accountId)
+    ]);
+    
+    // Procesar Stats
+    if (statsRes.success && statsRes.data) {
+      const backendData = statsRes.data as any;
       setStats({
         netPnL: backendData.netPnL,
         winRate: backendData.winRate,
@@ -62,12 +68,17 @@ export default function DashboardPage() {
         chartData: backendData.chartData
       });
     }
+
+    // Procesar Calendario
+    if (calendarRes.success && calendarRes.data) {
+        setCalendarData(calendarRes.data as any[]);
+    }
+
     setLoading(false);
   }
 
   const pnlColor = Number(stats.netPnL) >= 0 ? 'text-[#00FF7F]' : 'text-red-500';
 
-  // Si está cargando el contexto de cuentas o no hay cuenta seleccionada, mostramos loader
   if (isAccountLoading || !selectedAccount) {
     return (
       <div className="flex h-full items-center justify-center p-10">
@@ -82,7 +93,6 @@ export default function DashboardPage() {
       {/* Top Section */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
-          {/* Mostramos el nombre de la cuenta seleccionada dinámicamente */}
           <h1 className="text-3xl font-bold text-white flex items-center gap-2">
             {selectedAccount.name} <span className="text-gray-600 text-lg font-normal">Dashboard</span>
           </h1>
@@ -155,36 +165,50 @@ export default function DashboardPage() {
           </div>
        </div>
 
-       {/* Chart Section */}
-       <div className="bg-[#1e2329] p-6 rounded-2xl border border-gray-800 shadow-xl">
-           <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">Account Growth</h3>
-              <div className="flex gap-2">
-                  <button className="text-xs bg-[#0b0e11] text-white px-3 py-1 rounded hover:bg-gray-700">All Time</button>
-              </div>
-           </div>
+       {/* --- CHART & CALENDAR SECTION (NUEVO LAYOUT) --- */}
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
            
-           {loading ? (
-               <div className="h-[350px] flex items-center justify-center">
-                   <Loader2 className="animate-spin text-gray-600" size={32} />
+           {/* Chart ocupa 2 columnas */}
+           <div className="lg:col-span-2 bg-[#1e2329] p-6 rounded-2xl border border-gray-800 shadow-xl h-full">
+               <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-white">Account Growth</h3>
+                  <div className="flex gap-2">
+                      <button className="text-xs bg-[#0b0e11] text-white px-3 py-1 rounded hover:bg-gray-700">All Time</button>
+                  </div>
                </div>
-           ) : stats.chartData.length > 0 ? (
-               <GrowthChart data={stats.chartData} />
-           ) : (
-               <div className="h-[350px] flex flex-col items-center justify-center text-gray-500 border border-dashed border-gray-800 rounded-xl">
-                   <p>Not enough data to display chart yet.</p>
-                   <p className="text-xs">Close more trades to see your curve.</p>
-               </div>
-           )}
+               
+               {loading ? (
+                   <div className="h-[350px] flex items-center justify-center">
+                       <Loader2 className="animate-spin text-gray-600" size={32} />
+                   </div>
+               ) : stats.chartData.length > 0 ? (
+                   <GrowthChart data={stats.chartData} />
+               ) : (
+                   <div className="h-[350px] flex flex-col items-center justify-center text-gray-500 border border-dashed border-gray-800 rounded-xl">
+                       <p>Not enough data to display chart yet.</p>
+                       <p className="text-xs">Close more trades to see your curve.</p>
+                   </div>
+               )}
+           </div>
+
+           {/* Calendario ocupa 1 columna */}
+           <div className="lg:col-span-1 h-full">
+                {loading ? (
+                    <div className="h-[400px] bg-[#1e2329] rounded-2xl border border-gray-800 animate-pulse" />
+                ) : (
+                    <PnLCalendar data={calendarData} />
+                )}
+           </div>
+
        </div>
 
-      {user && selectedAccount && ( // Asegúrate de verificar selectedAccount
+      {user && selectedAccount && (
         <SettingsModal 
-            userId={user.id} 
-            accountId={selectedAccount.id} // <--- AGREGAR ESTO
-            isOpen={isSettingsOpen} 
-            onClose={() => setIsSettingsOpen(false)}
-            currentInitialBalance={stats.initialBalance}
+          userId={user.id} 
+          accountId={selectedAccount.id}
+          isOpen={isSettingsOpen} 
+          onClose={() => setIsSettingsOpen(false)}
+          currentInitialBalance={stats.initialBalance}
         />
       )}
     </div>
