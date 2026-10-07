@@ -1,5 +1,5 @@
 // db/schema.ts
-import { pgTable, serial, text, numeric, timestamp, varchar, integer } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, numeric, timestamp, varchar, integer, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // -----------------------------------------------------------------------------
@@ -41,6 +41,15 @@ export const trades = pgTable('trades', {
   
   entryDate: timestamp('entry_date').defaultNow().notNull(),
   exitDate: timestamp('exit_date'),
+
+  // HEDGE MODE & RISK MANAGEMENT FIELDS
+  isHedge: boolean('is_hedge').default(false),
+  riskPercentage: numeric('risk_percentage'),
+  riskAmount: numeric('risk_amount'),
+  hedgeTriggered: boolean('hedge_triggered').default(false),
+  hedgeStatus: varchar('hedge_status', { length: 20 }), // 'NOT_TRIGGERED' | 'WIN' | 'LOSS' | 'BREAKEVEN'
+  hedgePnl: numeric('hedge_pnl'),
+  hedgePnlPercent: numeric('hedge_pnl_percent'),
 });
 
 // -----------------------------------------------------------------------------

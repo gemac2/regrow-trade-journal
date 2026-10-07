@@ -59,6 +59,15 @@ export async function createTrade(formData: FormData) {
   const stopLoss = formData.get('stopLoss') as string || null;
   const takeProfit = formData.get('takeProfit') as string || null;
 
+  // Hedge Mode Fields
+  const isHedge = formData.get('isHedge') === 'true';
+  const riskPercentage = (formData.get('riskPercentage') as string) || null;
+  const riskAmount = (formData.get('riskAmount') as string) || null;
+  const hedgeTriggered = isHedge ? formData.get('hedgeTriggered') === 'true' : false;
+  const hedgeStatus = isHedge ? ((formData.get('hedgeStatus') as string) || (hedgeTriggered ? 'WIN' : 'NOT_TRIGGERED')) : null;
+  const hedgePnl = isHedge && hedgeTriggered ? ((formData.get('hedgePnl') as string) || null) : null;
+  const hedgePnlPercent = isHedge && hedgeTriggered ? ((formData.get('hedgePnlPercent') as string) || null) : null;
+
   let pnl = null;
   let status = 'OPEN';
   let exitDate = null;
@@ -67,7 +76,17 @@ export async function createTrade(formData: FormData) {
     const entry = parseFloat(entryPrice);
     const exit = parseFloat(exitPrice);
     const positionSize = parseFloat(size);
-    pnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
+    let totalPnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
+
+    // Sumar el resultado de la cobertura al PnL total del trade si aplica
+    if (isHedge && hedgeTriggered && hedgePnl) {
+      const extraHedgePnl = parseFloat(hedgePnl);
+      if (!isNaN(extraHedgePnl)) {
+        totalPnl += extraHedgePnl;
+      }
+    }
+    
+    pnl = totalPnl;
     
     if (pnl > 0) status = 'WIN';
     else if (pnl < 0) status = 'LOSS';
@@ -86,11 +105,18 @@ export async function createTrade(formData: FormData) {
       entryPrice,
       exitPrice,
       size,
-      pnl: pnl ? pnl.toString() : null,
+      pnl: pnl !== null ? pnl.toString() : null,
       stopLoss,
       takeProfit,
       status,
       exitDate,
+      isHedge,
+      riskPercentage,
+      riskAmount,
+      hedgeTriggered,
+      hedgeStatus,
+      hedgePnl,
+      hedgePnlPercent,
     });
     revalidatePath('/');
     return { success: true };
@@ -111,6 +137,15 @@ export async function updateTrade(formData: FormData) {
     const exitPrice = formData.get('exitPrice') as string || null;
     const stopLoss = formData.get('stopLoss') as string || null;
     const takeProfit = formData.get('takeProfit') as string || null;
+
+    // Hedge Mode Fields
+    const isHedge = formData.get('isHedge') === 'true';
+    const riskPercentage = (formData.get('riskPercentage') as string) || null;
+    const riskAmount = (formData.get('riskAmount') as string) || null;
+    const hedgeTriggered = isHedge ? formData.get('hedgeTriggered') === 'true' : false;
+    const hedgeStatus = isHedge ? ((formData.get('hedgeStatus') as string) || (hedgeTriggered ? 'WIN' : 'NOT_TRIGGERED')) : null;
+    const hedgePnl = isHedge && hedgeTriggered ? ((formData.get('hedgePnl') as string) || null) : null;
+    const hedgePnlPercent = isHedge && hedgeTriggered ? ((formData.get('hedgePnlPercent') as string) || null) : null;
     
     let pnl = null;
     let status = 'OPEN';
@@ -121,7 +156,16 @@ export async function updateTrade(formData: FormData) {
       const exit = parseFloat(exitPrice);
       const positionSize = parseFloat(size);
       
-      pnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
+      let totalPnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
+
+      if (isHedge && hedgeTriggered && hedgePnl) {
+        const extraHedgePnl = parseFloat(hedgePnl);
+        if (!isNaN(extraHedgePnl)) {
+          totalPnl += extraHedgePnl;
+        }
+      }
+
+      pnl = totalPnl;
       
       if (pnl > 0) status = 'WIN';
       else if (pnl < 0) status = 'LOSS';
@@ -138,10 +182,17 @@ export async function updateTrade(formData: FormData) {
         entryPrice,
         exitPrice,
         size,
-        pnl: pnl ? pnl.toString() : null,
+        pnl: pnl !== null ? pnl.toString() : null,
         stopLoss,
         takeProfit,
         status,
+        isHedge,
+        riskPercentage,
+        riskAmount,
+        hedgeTriggered,
+        hedgeStatus,
+        hedgePnl,
+        hedgePnlPercent,
       };
 
       if (exitDate) {
@@ -318,6 +369,91 @@ export async function getStrategyStats(userId: string, accountId: number) {
   } catch (error) {
     console.error("Strategy stats error:", error);
     return { success: false, data: [] };
+  }
+}
+
+// 9. Get Hedge Analytics
+export async function getHedgeStats(userId: string, accountId: number) {
+  try {
+    const hedgeTrades = await db.select()
+      .from(trades)
+      .where(and(
+        eq(trades.userId, userId),
+        eq(trades.accountId, accountId),
+        eq(trades.isHedge, true)
+      ))
+      .orderBy(desc(trades.entryDate));
+
+    const totalHedgeTrades = hedgeTrades.length;
+    let notTriggeredCount = 0;
+    let triggeredCount = 0;
+    let winCount = 0;
+    let lossCount = 0;
+    let breakevenCount = 0;
+    let totalHedgePnl = 0;
+    let totalHedgeWinsPnl = 0;
+    let totalHedgeLossesPnl = 0;
+    let sumRiskPercent = 0;
+    let countRiskPercent = 0;
+
+    hedgeTrades.forEach(trade => {
+      if (trade.riskPercentage) {
+        const r = parseFloat(trade.riskPercentage);
+        if (!isNaN(r)) {
+          sumRiskPercent += r;
+          countRiskPercent++;
+        }
+      }
+
+      if (!trade.hedgeTriggered || trade.hedgeStatus === 'NOT_TRIGGERED') {
+        notTriggeredCount++;
+      } else {
+        triggeredCount++;
+        const pnl = trade.hedgePnl ? parseFloat(trade.hedgePnl) : 0;
+        totalHedgePnl += pnl;
+
+        if (trade.hedgeStatus === 'WIN') {
+          winCount++;
+          totalHedgeWinsPnl += Math.max(0, pnl);
+        } else if (trade.hedgeStatus === 'LOSS') {
+          lossCount++;
+          totalHedgeLossesPnl += Math.abs(Math.min(0, pnl));
+        } else if (trade.hedgeStatus === 'BREAKEVEN') {
+          breakevenCount++;
+        }
+      }
+    });
+
+    const notTriggeredRate = totalHedgeTrades > 0 ? (notTriggeredCount / totalHedgeTrades) * 100 : 0;
+    const triggeredRate = totalHedgeTrades > 0 ? (triggeredCount / totalHedgeTrades) * 100 : 0;
+    const winRate = triggeredCount > 0 ? (winCount / triggeredCount) * 100 : 0;
+    const lossRate = triggeredCount > 0 ? (lossCount / triggeredCount) * 100 : 0;
+    const breakevenRate = triggeredCount > 0 ? (breakevenCount / triggeredCount) * 100 : 0;
+    const avgRiskPercent = countRiskPercent > 0 ? sumRiskPercent / countRiskPercent : 0;
+
+    return {
+      success: true,
+      data: {
+        totalHedgeTrades,
+        notTriggeredCount,
+        notTriggeredRate: notTriggeredRate.toFixed(1),
+        triggeredCount,
+        triggeredRate: triggeredRate.toFixed(1),
+        winCount,
+        lossCount,
+        breakevenCount,
+        winRate: winRate.toFixed(1),
+        lossRate: lossRate.toFixed(1),
+        breakevenRate: breakevenRate.toFixed(1),
+        totalHedgePnl: totalHedgePnl.toFixed(2),
+        totalHedgeWinsPnl: totalHedgeWinsPnl.toFixed(2),
+        totalHedgeLossesPnl: totalHedgeLossesPnl.toFixed(2),
+        avgRiskPercent: avgRiskPercent.toFixed(2),
+      }
+    };
+  } catch (error) {
+    console.error("Hedge stats error:", error);
+    return { success: false, data: null };
   }
 }
 

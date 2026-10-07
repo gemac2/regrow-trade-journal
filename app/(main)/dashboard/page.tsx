@@ -4,12 +4,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
 import { useAccount } from '@/app/context/AccountContext';
-import { getStats, getCalendarData, getStrategyStats } from '@/app/actions'; // <--- 1. IMPORTAR getStrategyStats
+import { getStats, getCalendarData, getStrategyStats, getHedgeStats } from '@/app/actions'; 
 import { Loader2, TrendingUp, TrendingDown, Activity, Wallet, Pencil, PieChart as PieIcon } from 'lucide-react'; 
 import { GrowthChart } from '@/components/GrowthChart';
 import { SettingsModal } from '@/components/SettingsModal'; 
 import { PnLCalendar } from '@/components/PnLCalendar'; 
-import { StrategyDonut } from '@/components/StrategyDonut'; // <--- 2. IMPORTAR StrategyDonut
+import { StrategyDonut } from '@/components/StrategyDonut'; 
+import { HedgeAnalytics } from '@/components/HedgeAnalytics';
 
 interface DashboardStats {
   netPnL: string;
@@ -39,8 +40,8 @@ export default function DashboardPage() {
   });
 
   const [calendarData, setCalendarData] = useState<any[]>([]);
-  // 3. NUEVO ESTADO PARA ESTRATEGIAS
   const [strategyData, setStrategyData] = useState<any[]>([]);
+  const [hedgeData, setHedgeData] = useState<any>(null);
 
   useEffect(() => {
     if (user && selectedAccount) {
@@ -51,11 +52,12 @@ export default function DashboardPage() {
   async function loadData(userId: string, accountId: number) {
     setLoading(true);
     
-    // 4. CARGA EN PARALELO (Stats + Calendar + Strategies)
-    const [statsRes, calendarRes, strategyRes] = await Promise.all([
+    // CARGA EN PARALELO (Stats + Calendar + Strategies + Hedge)
+    const [statsRes, calendarRes, strategyRes, hedgeRes] = await Promise.all([
       getStats(userId, accountId),
       getCalendarData(userId, accountId),
-      getStrategyStats(userId, accountId) // <--- LLAMADA A LA ACCIÓN
+      getStrategyStats(userId, accountId),
+      getHedgeStats(userId, accountId)
     ]);
     
     // Procesar Stats
@@ -80,6 +82,11 @@ export default function DashboardPage() {
     // Procesar Estrategias
     if (strategyRes.success && strategyRes.data) {
         setStrategyData(strategyRes.data as any[]);
+    }
+
+    // Procesar Hedge Stats
+    if (hedgeRes.success && hedgeRes.data) {
+        setHedgeData(hedgeRes.data);
     }
 
     setLoading(false);
@@ -216,6 +223,9 @@ export default function DashboardPage() {
            </div>
 
        </div>
+
+       {/* --- HEDGE ANALYTICS (Full Width) --- */}
+       <HedgeAnalytics data={hedgeData} loading={loading} />
 
        {/* --- CALENDAR ROW (Full Width) --- */}
        <div className="grid grid-cols-1">

@@ -84,9 +84,25 @@ export default function TradesPage() {
   // Filtering Logic
   const filteredTrades = trades.filter((trade) => {
     const matchesSearch = trade.symbol.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'ALL' || trade.type === filterType;
+    
+    let matchesType = true;
+    if (filterType === 'LONG') matchesType = trade.type === 'LONG';
+    else if (filterType === 'SHORT') matchesType = trade.type === 'SHORT';
+    else if (filterType === 'HEDGE') matchesType = Boolean(trade.isHedge);
+    else if (filterType === 'HEDGE_NO_TRIGGER') matchesType = Boolean(trade.isHedge) && (!trade.hedgeTriggered || trade.hedgeStatus === 'NOT_TRIGGERED');
+    else if (filterType === 'HEDGE_WIN') matchesType = Boolean(trade.isHedge) && trade.hedgeStatus === 'WIN';
+    else if (filterType === 'HEDGE_LOSS') matchesType = Boolean(trade.isHedge) && trade.hedgeStatus === 'LOSS';
+    else if (filterType === 'HEDGE_BE') matchesType = Boolean(trade.isHedge) && trade.hedgeStatus === 'BREAKEVEN';
+
     return matchesSearch && matchesType;
   });
+
+  // Count metrics for quick filter bar
+  const totalHedgeCount = trades.filter(t => t.isHedge).length;
+  const noHedgeCount = trades.filter(t => t.isHedge && (!t.hedgeTriggered || t.hedgeStatus === 'NOT_TRIGGERED')).length;
+  const winHedgeCount = trades.filter(t => t.isHedge && t.hedgeStatus === 'WIN').length;
+  const lossHedgeCount = trades.filter(t => t.isHedge && t.hedgeStatus === 'LOSS').length;
+  const beHedgeCount = trades.filter(t => t.isHedge && t.hedgeStatus === 'BREAKEVEN').length;
 
   const totalPages = Math.ceil(filteredTrades.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -114,7 +130,7 @@ export default function TradesPage() {
           <h1 className="text-3xl font-bold text-white flex items-center gap-2">
             {selectedAccount.name} <span className="text-gray-600 text-lg font-normal">Trade Log</span>
           </h1>
-          <p className="text-gray-400">Manage and review your trading history.</p>
+          <p className="text-gray-400">Manage, hedge and review your trading history.</p>
         </div>
         <button 
           onClick={handleCreate}
@@ -123,6 +139,64 @@ export default function TradesPage() {
           <Plus size={18} /> Add Trade
         </button>
       </div>
+
+      {/* Hedge Quick Stats Ribbon */}
+      {totalHedgeCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 p-2.5 bg-[#13171D] rounded-xl border border-gray-800 text-xs">
+          <span className="text-gray-400 font-semibold px-2 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#00A3FF]"></span>
+            Hedge Ribbon:
+          </span>
+          <button
+            onClick={() => setFilterType('HEDGE')}
+            className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
+              filterType === 'HEDGE' ? 'bg-[#00A3FF] text-black font-bold' : 'bg-[#0b0e11] text-gray-300 hover:text-white border border-gray-800'
+            }`}
+          >
+            Total Hedge ({totalHedgeCount})
+          </button>
+          <button
+            onClick={() => setFilterType('HEDGE_NO_TRIGGER')}
+            className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
+              filterType === 'HEDGE_NO_TRIGGER' ? 'bg-blue-500 text-white font-bold' : 'bg-[#0b0e11] text-blue-400 hover:bg-blue-500/10 border border-blue-500/30'
+            }`}
+          >
+            🛡️ Sin Cobertura ({noHedgeCount})
+          </button>
+          <button
+            onClick={() => setFilterType('HEDGE_WIN')}
+            className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
+              filterType === 'HEDGE_WIN' ? 'bg-[#00FF7F] text-black font-bold' : 'bg-[#0b0e11] text-[#00FF7F] hover:bg-green-500/10 border border-green-500/30'
+            }`}
+          >
+            ✅ Ganadas ({winHedgeCount})
+          </button>
+          <button
+            onClick={() => setFilterType('HEDGE_LOSS')}
+            className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
+              filterType === 'HEDGE_LOSS' ? 'bg-red-500 text-white font-bold' : 'bg-[#0b0e11] text-red-400 hover:bg-red-500/10 border border-red-500/30'
+            }`}
+          >
+            ❌ Perdidas ({lossHedgeCount})
+          </button>
+          <button
+            onClick={() => setFilterType('HEDGE_BE')}
+            className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
+              filterType === 'HEDGE_BE' ? 'bg-yellow-400 text-black font-bold' : 'bg-[#0b0e11] text-yellow-400 hover:bg-yellow-500/10 border border-yellow-500/30'
+            }`}
+          >
+            ⚖️ Breakeven ({beHedgeCount})
+          </button>
+          {filterType.startsWith('HEDGE') && (
+            <button
+              onClick={() => setFilterType('ALL')}
+              className="ml-auto text-[11px] text-gray-500 hover:text-gray-300 underline"
+            >
+              Reset filtro
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Controls Bar */}
       <div className="bg-[#1e2329] p-4 rounded-xl border border-gray-800 flex flex-col md:flex-row gap-4">
@@ -136,16 +210,21 @@ export default function TradesPage() {
               className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:border-[#00A3FF] outline-none transition-colors"
             />
          </div>
-         <div className="relative min-w-[150px]">
+         <div className="relative min-w-[190px]">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
             <select 
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
                 className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:border-[#00A3FF] outline-none appearance-none cursor-pointer"
             >
-                <option value="ALL">All Types</option>
+                <option value="ALL">All Trades</option>
                 <option value="LONG">Longs Only</option>
                 <option value="SHORT">Shorts Only</option>
+                <option value="HEDGE">Modo Hedge (Todos)</option>
+                <option value="HEDGE_NO_TRIGGER">Hedge: Sin Cobertura</option>
+                <option value="HEDGE_WIN">Hedge: Coberturas Ganadas</option>
+                <option value="HEDGE_LOSS">Hedge: Coberturas Perdidas</option>
+                <option value="HEDGE_BE">Hedge: Coberturas BE</option>
             </select>
          </div>
       </div>
@@ -159,8 +238,7 @@ export default function TradesPage() {
                 <th className="px-6 py-4">Date</th>
                 <th className="px-6 py-4">Symbol</th>
                 <th className="px-6 py-4">Type</th>
-                {/* NUEVA COLUMNA */}
-                <th className="px-6 py-4">Strategy</th>
+                <th className="px-6 py-4">Strategy & Hedge</th>
                 <th className="px-6 py-4">Entry</th>
                 <th className="px-6 py-4">Size</th>
                 <th className="px-6 py-4">Exit</th>
@@ -180,10 +258,19 @@ export default function TradesPage() {
               ) : (
                 currentTrades.map((trade) => (
                   <tr key={trade.id} className="hover:bg-[#252b33] transition-colors group">
-                    <td className="px-6 py-4 text-gray-500 text-xs">
+                    <td className="px-6 py-4 text-gray-500 text-xs font-mono">
                         {new Date(trade.entryDate).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 font-bold text-white">{trade.symbol}</td>
+                    <td className="px-6 py-4 font-bold text-white">
+                      <div className="flex items-center gap-1.5">
+                        <span>{trade.symbol}</span>
+                        {trade.isHedge && (
+                          <span className="text-[9px] uppercase px-1.5 py-0.2 rounded bg-[#00A3FF]/20 text-[#00A3FF] border border-[#00A3FF]/40 font-bold" title="Hedge Mode Trade">
+                            HEDGE
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${
                         trade.type === 'LONG' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
@@ -193,15 +280,45 @@ export default function TradesPage() {
                       </span>
                     </td>
                     
-                    {/* NUEVA CELDA: STRATEGY */}
+                    {/* CELDA: STRATEGY & HEDGE BADGES */}
                     <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1 items-start">
                         {trade.strategy ? (
-                            <span className="bg-[#0b0e11] text-gray-300 px-2 py-1 rounded text-xs border border-gray-700 font-medium">
+                            <span className="bg-[#0b0e11] text-gray-300 px-2 py-0.5 rounded text-xs border border-gray-700 font-medium">
                                 {trade.strategy}
                             </span>
                         ) : (
                             <span className="text-gray-600 text-xs">-</span>
                         )}
+
+                        {trade.isHedge && (
+                          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                            {!trade.hedgeTriggered || trade.hedgeStatus === 'NOT_TRIGGERED' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                                Sin Cobertura
+                              </span>
+                            ) : trade.hedgeStatus === 'WIN' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/30">
+                                Hedge WIN {trade.hedgePnl ? `(+$${trade.hedgePnl})` : ''}
+                              </span>
+                            ) : trade.hedgeStatus === 'LOSS' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30">
+                                Hedge LOSS {trade.hedgePnl ? `(-$${Math.abs(Number(trade.hedgePnl))})` : ''}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/30">
+                                Hedge BE
+                              </span>
+                            )}
+
+                            {trade.riskPercentage && (
+                              <span className="text-[10px] font-mono text-gray-400 bg-[#0b0e11] px-1.5 py-0.5 rounded border border-gray-800">
+                                {trade.riskPercentage}% rsk
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     <td className="px-6 py-4 font-mono text-gray-300">${Number(trade.entryPrice).toFixed(4)}</td>
