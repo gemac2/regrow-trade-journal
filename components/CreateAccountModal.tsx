@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useAccount } from '@/app/context/AccountContext';
-import { X, Loader2, PlusCircle } from 'lucide-react';
+import { X, Loader2, PlusCircle, AlertCircle } from 'lucide-react';
 
 interface CreateAccountModalProps {
   isOpen: boolean;
@@ -15,12 +15,14 @@ export function CreateAccountModal({ isOpen, onClose }: CreateAccountModalProps)
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError('');
     
     // Llamamos a la función del contexto
     const success = await createNewAccount(name, balance);
@@ -31,7 +33,10 @@ export function CreateAccountModal({ isOpen, onClose }: CreateAccountModalProps)
       // Limpiamos y cerramos solo si tuvo éxito
       setName('');
       setBalance('');
+      setError('');
       onClose();
+    } else {
+      setError('Could not create account. Please try again.');
     }
   }
 
@@ -46,6 +51,13 @@ export function CreateAccountModal({ isOpen, onClose }: CreateAccountModalProps)
             <X size={20} />
           </button>
         </div>
+
+        {error && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

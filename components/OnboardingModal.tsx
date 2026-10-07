@@ -3,13 +3,14 @@
 
 import { useState } from 'react';
 import { useAccount } from '@/app/context/AccountContext';
-import { Loader2, ArrowRight } from 'lucide-react';
+import { Loader2, ArrowRight, AlertCircle } from 'lucide-react';
 
 export function OnboardingModal() {
   const { accounts, isLoading, createNewAccount } = useAccount();
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   // Si está cargando o SI tiene cuentas, no mostramos nada
   if (isLoading || accounts.length > 0) return null;
@@ -17,7 +18,11 @@ export function OnboardingModal() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    await createNewAccount(name, balance);
+    setError('');
+    const success = await createNewAccount(name, balance);
+    if (!success) {
+      setError('Could not create account. Please try again.');
+    }
     setSubmitting(false);
     // El modal desaparecerá solo porque accounts.length > 0 será true
   }
@@ -36,6 +41,13 @@ export function OnboardingModal() {
         </div>
 
         <div className="bg-[#1e2329] p-8 rounded-2xl border border-gray-800 shadow-2xl text-left">
+          {error && (
+            <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+              <AlertCircle size={18} className="shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase">Account Name</label>
@@ -53,6 +65,8 @@ export function OnboardingModal() {
               <input 
                 required
                 type="number"
+                step="any"
+                min="0"
                 placeholder="e.g. 1000"
                 value={balance}
                 onChange={e => setBalance(e.target.value)}
@@ -63,7 +77,7 @@ export function OnboardingModal() {
             <button 
               type="submit" 
               disabled={submitting}
-              className="w-full bg-[#00FF7F] hover:bg-[#00e676] text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+              className="w-full bg-[#00FF7F] hover:bg-[#00e676] text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? <Loader2 className="animate-spin" /> : <>Create Account <ArrowRight size={18} /></>}
             </button>
