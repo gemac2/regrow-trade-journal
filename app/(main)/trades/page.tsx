@@ -17,7 +17,8 @@ import {
   Filter, 
   ChevronLeft, 
   ChevronRight,
-  Loader2 
+  Loader2,
+  Clock 
 } from 'lucide-react';
 
 export default function TradesPage() {
@@ -89,6 +90,7 @@ export default function TradesPage() {
     if (filterType === 'LONG') matchesType = trade.type === 'LONG';
     else if (filterType === 'SHORT') matchesType = trade.type === 'SHORT';
     else if (filterType === 'HEDGE') matchesType = Boolean(trade.isHedge);
+    else if (filterType === 'HEDGE_MANAGING') matchesType = Boolean(trade.isHedge) && Boolean(trade.hedgeTriggered) && trade.hedgeStatus === 'MANAGING';
     else if (filterType === 'HEDGE_NO_TRIGGER') matchesType = Boolean(trade.isHedge) && (!trade.hedgeTriggered || trade.hedgeStatus === 'NOT_TRIGGERED');
     else if (filterType === 'HEDGE_WIN') matchesType = Boolean(trade.isHedge) && trade.hedgeStatus === 'WIN';
     else if (filterType === 'HEDGE_LOSS') matchesType = Boolean(trade.isHedge) && trade.hedgeStatus === 'LOSS';
@@ -99,6 +101,7 @@ export default function TradesPage() {
 
   // Count metrics for quick filter bar
   const totalHedgeCount = trades.filter(t => t.isHedge).length;
+  const managingHedgeCount = trades.filter(t => t.isHedge && t.hedgeTriggered && t.hedgeStatus === 'MANAGING').length;
   const noHedgeCount = trades.filter(t => t.isHedge && (!t.hedgeTriggered || t.hedgeStatus === 'NOT_TRIGGERED')).length;
   const winHedgeCount = trades.filter(t => t.isHedge && t.hedgeStatus === 'WIN').length;
   const lossHedgeCount = trades.filter(t => t.isHedge && t.hedgeStatus === 'LOSS').length;
@@ -154,6 +157,15 @@ export default function TradesPage() {
             }`}
           >
             Total Hedge ({totalHedgeCount})
+          </button>
+          <button
+            onClick={() => setFilterType('HEDGE_MANAGING')}
+            className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
+              filterType === 'HEDGE_MANAGING' ? 'bg-amber-500 text-black font-bold' : 'bg-[#0b0e11] text-amber-400 hover:bg-amber-500/10 border border-amber-500/30'
+            }`}
+          >
+            <Clock size={12} className={filterType === 'HEDGE_MANAGING' ? 'animate-spin' : ''} />
+            Gestionando ({managingHedgeCount})
           </button>
           <button
             onClick={() => setFilterType('HEDGE_NO_TRIGGER')}
@@ -221,6 +233,7 @@ export default function TradesPage() {
                 <option value="LONG">Longs Only</option>
                 <option value="SHORT">Shorts Only</option>
                 <option value="HEDGE">Modo Hedge (Todos)</option>
+                <option value="HEDGE_MANAGING">Hedge: Gestionando ({managingHedgeCount})</option>
                 <option value="HEDGE_NO_TRIGGER">Hedge: Sin Cobertura</option>
                 <option value="HEDGE_WIN">Hedge: Coberturas Ganadas</option>
                 <option value="HEDGE_LOSS">Hedge: Coberturas Perdidas</option>
@@ -297,6 +310,11 @@ export default function TradesPage() {
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
                                 Sin Cobertura
                               </span>
+                            ) : trade.hedgeStatus === 'MANAGING' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                                <Clock size={10} className="animate-spin text-amber-400" />
+                                Gestionando {trade.riskAmount ? `(-$${Number(trade.riskAmount).toFixed(2)})` : ''}
+                              </span>
                             ) : trade.hedgeStatus === 'WIN' ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/30">
                                 Hedge WIN {trade.hedgePnl ? `(+$${trade.hedgePnl})` : ''}
@@ -326,10 +344,25 @@ export default function TradesPage() {
                     <td className="px-6 py-4 font-mono text-gray-300">
                       {trade.exitPrice ? `$${Number(trade.exitPrice).toFixed(4)}` : '-'}
                     </td>
-                    <td className={`px-6 py-4 font-mono font-bold ${
-                      Number(trade.pnl) > 0 ? 'text-[#00FF7F]' : Number(trade.pnl) < 0 ? 'text-red-400' : 'text-gray-500'
-                    }`}>
-                      {trade.pnl ? `${Number(trade.pnl) > 0 ? '+' : ''}$${Number(trade.pnl).toFixed(4)}` : 'OPEN'}
+                    <td className="px-6 py-4 font-mono font-bold">
+                      {trade.hedgeStatus === 'MANAGING' ? (
+                        <div className="flex flex-col">
+                          <span className="text-amber-400 font-bold">
+                            -${trade.riskAmount && !isNaN(Number(trade.riskAmount))
+                              ? Number(trade.riskAmount).toFixed(2)
+                              : (trade.stopLoss && trade.entryPrice && trade.size
+                                ? (Math.abs(Number(trade.entryPrice) - Number(trade.stopLoss)) * Number(trade.size)).toFixed(2)
+                                : '0.00')}
+                          </span>
+                          <span className="text-[10px] font-sans font-normal text-amber-400/70">Congelado</span>
+                        </div>
+                      ) : trade.pnl ? (
+                        <span className={Number(trade.pnl) > 0 ? 'text-[#00FF7F]' : Number(trade.pnl) < 0 ? 'text-red-400' : 'text-gray-500'}>
+                          {Number(trade.pnl) > 0 ? '+' : ''}${Number(trade.pnl).toFixed(4)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">OPEN</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
                       <button 

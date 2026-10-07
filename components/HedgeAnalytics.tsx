@@ -1,7 +1,7 @@
 // components/HedgeAnalytics.tsx
 'use client';
 
-import { ShieldCheck, ShieldAlert, ArrowRightLeft, Percent, Wallet, Layers, CheckCircle2, XCircle, MinusCircle, HelpCircle } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, ArrowRightLeft, Percent, Wallet, Layers, CheckCircle2, XCircle, MinusCircle, HelpCircle, Clock } from 'lucide-react';
 
 interface HedgeData {
   totalHedgeTrades: number;
@@ -12,12 +12,15 @@ interface HedgeData {
   winCount: number;
   lossCount: number;
   breakevenCount: number;
+  managingCount?: number;
+  managingRate?: string;
   winRate: string;
   lossRate: string;
   breakevenRate: string;
   totalHedgePnl: string;
   totalHedgeWinsPnl: string;
   totalHedgeLossesPnl: string;
+  totalManagingFrozenLoss?: string;
   avgRiskPercent: string;
 }
 
@@ -176,6 +179,28 @@ export function HedgeAnalytics({ data, loading }: HedgeAnalyticsProps) {
 
       </div>
 
+      {/* Banner de Coberturas en Gestión Activa */}
+      {data.managingCount && data.managingCount > 0 ? (
+        <div className="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-xl flex items-center justify-between flex-wrap gap-2 animate-in fade-in duration-300">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-amber-500/20 text-amber-400 rounded-lg">
+              <Clock size={16} className="animate-spin" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-300">
+                {data.managingCount} {data.managingCount === 1 ? 'Cobertura en Gestión Activa' : 'Coberturas en Gestión Activa'}
+              </p>
+              <p className="text-[11px] text-gray-300">
+                El saldo de tu cuenta tiene descontados <span className="text-red-400 font-mono font-bold">-${data.totalManagingFrozenLoss || '0.00'}</span> congelados temporalmente.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-mono font-bold bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-md border border-amber-500/30">
+            {data.managingRate}% de operaciones en gestión
+          </span>
+        </div>
+      ) : null}
+
       {/* Barra de Distribución Visual y Balance Neto */}
       <div className="bg-[#10141a] p-4 rounded-xl border border-gray-800 flex flex-col md:flex-row items-center justify-between gap-4">
         
@@ -195,6 +220,14 @@ export function HedgeAnalytics({ data, loading }: HedgeAnalyticsProps) {
               className="bg-blue-500 transition-all" 
               title={`Sin Cobertura: ${data.notTriggeredCount} (${data.notTriggeredRate}%)`} 
             />
+            {/* En Gestión */}
+            {data.managingCount && data.managingCount > 0 ? (
+              <div 
+                style={{ width: `${(data.managingCount / data.totalHedgeTrades) * 100}%` }} 
+                className="bg-amber-500 transition-all" 
+                title={`En Gestión: ${data.managingCount}`} 
+              />
+            ) : null}
             {/* Ganadas */}
             <div 
               style={{ width: `${(data.winCount / data.totalHedgeTrades) * 100}%` }} 
@@ -220,6 +253,12 @@ export function HedgeAnalytics({ data, loading }: HedgeAnalyticsProps) {
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
               <span>Sin Cobertura ({data.notTriggeredCount})</span>
             </div>
+            {data.managingCount && data.managingCount > 0 ? (
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <span>En Gestión ({data.managingCount})</span>
+              </div>
+            ) : null}
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#00FF7F]"></span>
               <span>Ganadas ({data.winCount})</span>

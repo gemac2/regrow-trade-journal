@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
 import { useAccount } from '@/app/context/AccountContext';
 import { getStats, getCalendarData, getStrategyStats, getHedgeStats } from '@/app/actions'; 
-import { Loader2, TrendingUp, TrendingDown, Activity, Wallet, Pencil, PieChart as PieIcon } from 'lucide-react'; 
+import { Loader2, TrendingUp, TrendingDown, Activity, Wallet, Pencil, PieChart as PieIcon, Clock } from 'lucide-react'; 
 import { GrowthChart } from '@/components/GrowthChart';
 import { SettingsModal } from '@/components/SettingsModal'; 
 import { PnLCalendar } from '@/components/PnLCalendar'; 
@@ -20,6 +20,8 @@ interface DashboardStats {
   currentBalance: string;
   initialBalance: string;
   chartData: { date: string; balance: number; pnl: number }[]; 
+  totalFrozenLoss?: string;
+  managingCount?: number;
 }
 
 export default function DashboardPage() {
@@ -36,7 +38,9 @@ export default function DashboardPage() {
     totalTrades: 0,
     currentBalance: "0.00",
     initialBalance: "0.00", 
-    chartData: []
+    chartData: [],
+    totalFrozenLoss: "0.00",
+    managingCount: 0
   });
 
   const [calendarData, setCalendarData] = useState<any[]>([]);
@@ -70,7 +74,9 @@ export default function DashboardPage() {
         totalTrades: backendData.totalTrades,
         currentBalance: backendData.currentBalance,
         initialBalance: backendData.initialBalance || "0", 
-        chartData: backendData.chartData
+        chartData: backendData.chartData,
+        totalFrozenLoss: backendData.totalFrozenLoss || "0.00",
+        managingCount: backendData.managingCount || 0
       });
     }
 
@@ -133,9 +139,17 @@ export default function DashboardPage() {
             )}
             
             {!loading && (
-              <span className="text-[10px] text-gray-600 mt-1">
-                Started with ${stats.initialBalance}
-              </span>
+              <div className="flex flex-col items-end gap-1 mt-1">
+                <span className="text-[10px] text-gray-500">
+                  Started with ${stats.initialBalance}
+                </span>
+                {stats.totalFrozenLoss && Number(stats.totalFrozenLoss) > 0 && (
+                  <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm" title="Cantidad congelada descontada del saldo mientras está en gestión">
+                    <Clock size={10} className="animate-spin text-amber-400" />
+                    -${stats.totalFrozenLoss} congelado ({stats.managingCount} en gestión)
+                  </span>
+                )}
+              </div>
             )}
         </div>
       </div>

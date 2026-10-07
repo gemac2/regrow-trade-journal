@@ -47,7 +47,7 @@ export const trades = pgTable('trades', {
   riskPercentage: numeric('risk_percentage'),
   riskAmount: numeric('risk_amount'),
   hedgeTriggered: boolean('hedge_triggered').default(false),
-  hedgeStatus: varchar('hedge_status', { length: 20 }), // 'NOT_TRIGGERED' | 'WIN' | 'LOSS' | 'BREAKEVEN'
+  hedgeStatus: varchar('hedge_status', { length: 20 }), // 'NOT_TRIGGERED' | 'WIN' | 'LOSS' | 'BREAKEVEN' | 'MANAGING'
   hedgePnl: numeric('hedge_pnl'),
   hedgePnlPercent: numeric('hedge_pnl_percent'),
 });
