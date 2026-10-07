@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from 'react';
 import { createTrade, updateTrade } from '@/app/actions';
-import { X, Loader2, ShieldCheck, Clock, Layers } from 'lucide-react';
+import { useAccount } from '@/app/context/AccountContext';
+import { X, Loader2, ShieldCheck, Clock, Layers, Lock } from 'lucide-react';
 
 interface TradeModalProps {
   userId: string;
@@ -14,6 +15,7 @@ interface TradeModalProps {
 }
 
 export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: TradeModalProps) {
+  const { selectedAccount } = useAccount();
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState('LONG');
 
@@ -21,10 +23,14 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
   const [isHedge, setIsHedge] = useState(false);
   const [riskPercentage, setRiskPercentage] = useState('');
   const [riskAmount, setRiskAmount] = useState('');
+  const [frozenLoss, setFrozenLoss] = useState('');
   const [hedgeTriggered, setHedgeTriggered] = useState(false);
   const [hedgeStatus, setHedgeStatus] = useState<'WIN' | 'LOSS' | 'BREAKEVEN' | 'MANAGING'>('MANAGING');
   const [hedgePnl, setHedgePnl] = useState('');
   const [hedgePnlPercent, setHedgePnlPercent] = useState('');
+
+  // Un campo de riesgo ya llenado y guardado no se puede volver a editar (fijo)
+  const isRiskFixed = Boolean(tradeToEdit && (tradeToEdit.riskPercentage || tradeToEdit.riskAmount));
 
   // Predefined strategies
   const strategies = [
@@ -58,6 +64,11 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
         }
       }
       setRiskAmount(initialRiskAmount);
+      setFrozenLoss(
+        tradeToEdit.frozenLoss 
+          ? String(tradeToEdit.frozenLoss) 
+          : (initialRiskAmount ? String(initialRiskAmount) : '')
+      );
 
       setHedgeTriggered(Boolean(tradeToEdit.hedgeTriggered));
       setHedgeStatus(
@@ -73,6 +84,7 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
       setIsHedge(false);
       setRiskPercentage('');
       setRiskAmount('');
+      setFrozenLoss('');
       setHedgeTriggered(false);
       setHedgeStatus('MANAGING');
       setHedgePnl('');
@@ -89,6 +101,7 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
     formData.set('isHedge', isHedge ? 'true' : 'false');
     formData.set('riskPercentage', isHedge ? riskPercentage : '');
     formData.set('riskAmount', isHedge ? riskAmount : '');
+    formData.set('frozenLoss', isHedge && hedgeTriggered && hedgeStatus === 'MANAGING' ? frozenLoss : (tradeToEdit?.frozenLoss || ''));
     formData.set('hedgeTriggered', isHedge && hedgeTriggered ? 'true' : 'false');
     formData.set('hedgeStatus', isHedge ? (hedgeTriggered ? hedgeStatus : 'NOT_TRIGGERED') : '');
     formData.set('hedgePnl', isHedge && hedgeTriggered ? (hedgeStatus === 'MANAGING' ? '' : hedgePnl) : '');
@@ -256,36 +269,58 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
               <div className="flex items-center gap-2 pb-2 border-b border-gray-800">
                 <ShieldCheck size={16} className="text-[#00A3FF]" />
                 <span className="text-xs font-bold text-white uppercase tracking-wider">Gestión de Cobertura y Riesgo</span>
-              </div>
-
-              {/* Riesgo de la cuenta */}
+              </div>              {/* Riesgo de la cuenta */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block font-medium">Riesgo Cuenta (%)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400 font-medium">Riesgo Cuenta (%)</label>
+                    {isRiskFixed && (
+                      <span className="text-[10px] text-amber-400/90 font-mono flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                        <Lock size={10} /> Fijo
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <input 
                       type="number" 
                       step="any" 
-                      min="0"
+                      min="0" 
                       placeholder="e.g. 1.0" 
                       value={riskPercentage}
-                      onChange={(e) => setRiskPercentage(e.target.value)}
-                      className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg p-3 pr-8 text-white focus:border-[#00A3FF] outline-none font-mono text-sm" 
+                      readOnly={isRiskFixed}
+                      onChange={(e) => !isRiskFixed && setRiskPercentage(e.target.value)}
+                      className={`w-full border rounded-lg p-3 pr-8 font-mono text-sm outline-none transition ${
+                        isRiskFixed 
+                          ? 'bg-[#090c0f] text-gray-400 border-gray-800 cursor-not-allowed select-none opacity-80' 
+                          : 'bg-[#0b0e11] text-white border-gray-700 focus:border-[#00A3FF]'
+                      }`}
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold">%</span>
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block font-medium">Riesgo en Dinero ($)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400 font-medium">Riesgo en Dinero ($)</label>
+                    {isRiskFixed && (
+                      <span className="text-[10px] text-amber-400/90 font-mono flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                        <Lock size={10} /> Fijo
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <input 
                       type="number" 
                       step="any" 
-                      min="0"
+                      min="0" 
                       placeholder="e.g. 100.00" 
                       value={riskAmount}
-                      onChange={(e) => setRiskAmount(e.target.value)}
-                      className="w-full bg-[#0b0e11] border border-gray-700 rounded-lg p-3 pl-7 text-white focus:border-[#00A3FF] outline-none font-mono text-sm" 
+                      readOnly={isRiskFixed}
+                      onChange={(e) => !isRiskFixed && setRiskAmount(e.target.value)}
+                      className={`w-full border rounded-lg p-3 pl-7 font-mono text-sm outline-none transition ${
+                        isRiskFixed 
+                          ? 'bg-[#090c0f] text-gray-400 border-gray-800 cursor-not-allowed select-none opacity-80' 
+                          : 'bg-[#0b0e11] text-white border-gray-700 focus:border-[#00A3FF]'
+                      }`}
                     />
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold">$</span>
                   </div>
@@ -299,7 +334,7 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                   <button
                     type="button"
                     onClick={() => setHedgeTriggered(false)}
-                    className={`p-2.5 rounded-lg text-xs font-bold border transition-all text-center ${
+                    className={`p-2.5 rounded-lg text-xs font-bold border transition-all text-center cursor-pointer ${
                       !hedgeTriggered 
                         ? 'bg-blue-500/20 text-[#00A3FF] border-[#00A3FF]/50 shadow-sm' 
                         : 'bg-[#0b0e11] text-gray-400 border-gray-800 hover:border-gray-700'
@@ -309,8 +344,11 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                   </button>
                   <button
                     type="button"
-                    onClick={() => setHedgeTriggered(true)}
-                    className={`p-2.5 rounded-lg text-xs font-bold border transition-all text-center ${
+                    onClick={() => {
+                      setHedgeTriggered(true);
+                      if (!frozenLoss && riskAmount) setFrozenLoss(riskAmount);
+                    }}
+                    className={`p-2.5 rounded-lg text-xs font-bold border transition-all text-center cursor-pointer ${
                       hedgeTriggered 
                         ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-sm' 
                         : 'bg-[#0b0e11] text-gray-400 border-gray-800 hover:border-gray-700'
@@ -329,8 +367,11 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <button
                         type="button"
-                        onClick={() => setHedgeStatus('MANAGING')}
-                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
+                        onClick={() => {
+                          setHedgeStatus('MANAGING');
+                          if (!frozenLoss && riskAmount) setFrozenLoss(riskAmount);
+                        }}
+                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
                           hedgeStatus === 'MANAGING' 
                             ? 'bg-amber-500/20 text-amber-400 border-amber-500/60 shadow-sm shadow-amber-500/20 ring-1 ring-amber-500/40' 
                             : 'bg-[#0b0e11] text-gray-500 border-gray-800 hover:border-gray-700'
@@ -341,8 +382,11 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                       </button>
                       <button
                         type="button"
-                        onClick={() => setHedgeStatus('WIN')}
-                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        onClick={() => {
+                          setHedgeStatus('WIN');
+                          if (hedgePnl && Number(hedgePnl) < 0) setHedgePnl(Math.abs(Number(hedgePnl)).toString());
+                        }}
+                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
                           hedgeStatus === 'WIN' 
                             ? 'bg-green-500/20 text-green-400 border-green-500/50 shadow-sm' 
                             : 'bg-[#0b0e11] text-gray-500 border-gray-800 hover:border-gray-700'
@@ -352,8 +396,10 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                       </button>
                       <button
                         type="button"
-                        onClick={() => setHedgeStatus('LOSS')}
-                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        onClick={() => {
+                          setHedgeStatus('LOSS');
+                        }}
+                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
                           hedgeStatus === 'LOSS' 
                             ? 'bg-red-500/20 text-red-400 border-red-500/50 shadow-sm' 
                             : 'bg-[#0b0e11] text-gray-500 border-gray-800 hover:border-gray-700'
@@ -363,8 +409,12 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                       </button>
                       <button
                         type="button"
-                        onClick={() => setHedgeStatus('BREAKEVEN')}
-                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        onClick={() => {
+                          setHedgeStatus('BREAKEVEN');
+                          setHedgePnl('0');
+                          setHedgePnlPercent('0');
+                        }}
+                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
                           hedgeStatus === 'BREAKEVEN' 
                             ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-sm' 
                             : 'bg-[#0b0e11] text-gray-500 border-gray-800 hover:border-gray-700'
@@ -377,33 +427,36 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
 
                   {hedgeStatus === 'MANAGING' ? (
                     /* BLOQUE GESTIONANDO: PÉRDIDA CONGELADA */
-                    <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/30 space-y-2.5 animate-in fade-in duration-200">
+                    <div className="bg-amber-500/10 p-3.5 rounded-lg border border-amber-500/30 space-y-2.5 animate-in fade-in duration-200">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                           <Clock size={13} className="text-amber-400 animate-spin" />
-                          Pérdida Congelada en Cobertura
+                          Pérdida Congelada en Cobertura (Flotante)
                         </span>
                         <span className="text-xs font-mono font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">
-                          -${riskAmount && !isNaN(Number(riskAmount)) ? Number(riskAmount).toFixed(2) : '0.00'}
+                          -${frozenLoss && !isNaN(Number(frozenLoss.replace(',', '.'))) ? Math.abs(Number(frozenLoss.replace(',', '.'))).toFixed(2) : '0.00'}
                         </span>
                       </div>
 
                       <p className="text-[11px] text-gray-300 leading-relaxed">
-                        La cobertura se encuentra activa. Mientras mantengas la opción <strong className="text-amber-400">Gestionando</strong>, el saldo de tu cuenta descontará automáticamente esta cantidad que se está perdiendo (congelada en la cobertura).
+                        La cobertura se encuentra activa. Mientras mantengas la opción <strong className="text-amber-400">Gestionando</strong>, el saldo de tu cuenta descontará automáticamente esta cantidad como flotante negativo pendiente.
                       </p>
 
                       <div className="pt-1">
-                        <label className="text-[11px] text-gray-400 mb-1 block font-medium">
-                          Cantidad Congelada a Descontar ($)
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] text-gray-400 font-medium">
+                            Cantidad Congelada a Descontar ($)
+                          </label>
+                          <span className="text-[10px] text-amber-400/80 font-mono">Variable / Modificable</span>
+                        </div>
                         <div className="relative">
                           <input 
                             type="number" 
                             step="any" 
                             min="0"
                             placeholder="Monto congelado de pérdida"
-                            value={riskAmount}
-                            onChange={(e) => setRiskAmount(e.target.value)}
+                            value={frozenLoss}
+                            onChange={(e) => setFrozenLoss(e.target.value)}
                             className="w-full bg-[#0b0e11] border border-amber-500/40 focus:border-amber-400 rounded-lg p-2.5 pl-7 text-white outline-none font-mono text-sm"
                           />
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold">$</span>
@@ -411,7 +464,7 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                       </div>
 
                       <p className="text-[10px] text-gray-400 italic">
-                        ℹ️ Ya cuando termines de gestionarla, edita este trade para actualizarlo con el resultado real (Ganada, Perdida o Breakeven).
+                        ℹ️ Este valor es independiente del riesgo inicial. Al ir gestionando puede disminuir o aumentar según la operación, y puedes actualizarlo cuantas veces necesites.
                       </p>
                     </div>
                   ) : (
@@ -419,14 +472,25 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3 pt-1">
                         <div>
-                          <label className="text-xs text-gray-400 mb-1 block">PnL Cobertura ($)</label>
+                          <label className="text-xs text-gray-400 mb-1 block font-medium">PnL Cobertura ($)</label>
                           <div className="relative">
                             <input 
                               type="number" 
                               step="any" 
-                              placeholder="e.g. +150 o -50"
+                              placeholder={hedgeStatus === 'LOSS' ? "e.g. -1.20" : hedgeStatus === 'WIN' ? "e.g. +1.50" : "0.00"}
                               value={hedgePnl}
-                              onChange={(e) => setHedgePnl(e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setHedgePnl(val);
+                                // Sugerir % automáticamente si está vacío
+                                if (val && selectedAccount?.initialBalance && (!hedgePnlPercent || hedgePnlPercent === '')) {
+                                  const bal = parseFloat(selectedAccount.initialBalance);
+                                  const num = parseFloat(val.replace(',', '.'));
+                                  if (!isNaN(bal) && bal > 0 && !isNaN(num)) {
+                                    setHedgePnlPercent(((num / bal) * 100).toFixed(2));
+                                  }
+                                }
+                              }}
                               className={`w-full bg-[#0b0e11] border rounded-lg p-2.5 pl-7 text-white outline-none font-mono text-sm ${
                                 hedgeStatus === 'WIN' ? 'border-green-500/40 focus:border-green-400' :
                                 hedgeStatus === 'LOSS' ? 'border-red-500/40 focus:border-red-400' :
@@ -437,14 +501,25 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                           </div>
                         </div>
                         <div>
-                          <label className="text-xs text-gray-400 mb-1 block">PnL Cobertura (%)</label>
+                          <label className="text-xs text-gray-400 mb-1 block font-medium">PnL Cobertura (%)</label>
                           <div className="relative">
                             <input 
                               type="number" 
                               step="any" 
-                              placeholder="e.g. +1.5 o -0.5"
+                              placeholder={hedgeStatus === 'LOSS' ? "e.g. -1.30" : hedgeStatus === 'WIN' ? "e.g. +1.50" : "0.00"}
                               value={hedgePnlPercent}
-                              onChange={(e) => setHedgePnlPercent(e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setHedgePnlPercent(val);
+                                // Sugerir $ automáticamente si está vacío
+                                if (val && selectedAccount?.initialBalance && (!hedgePnl || hedgePnl === '')) {
+                                  const bal = parseFloat(selectedAccount.initialBalance);
+                                  const num = parseFloat(val.replace(',', '.'));
+                                  if (!isNaN(bal) && bal > 0 && !isNaN(num)) {
+                                    setHedgePnl((bal * (num / 100)).toFixed(2));
+                                  }
+                                }
+                              }}
                               className={`w-full bg-[#0b0e11] border rounded-lg p-2.5 pr-7 text-white outline-none font-mono text-sm ${
                                 hedgeStatus === 'WIN' ? 'border-green-500/40 focus:border-green-400' :
                                 hedgeStatus === 'LOSS' ? 'border-red-500/40 focus:border-red-400' :
@@ -457,7 +532,7 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                       </div>
 
                       <p className="text-[11px] text-gray-400 italic">
-                        ℹ️ El resultado de la cobertura se sumará al PnL total del trade al cerrarse la operación.
+                        ℹ️ El resultado de la cobertura actualizará directamente el balance de la cuenta y las estadísticas globales.
                       </p>
                     </div>
                   )}

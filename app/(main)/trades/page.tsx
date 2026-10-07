@@ -313,15 +313,15 @@ export default function TradesPage() {
                             ) : trade.hedgeStatus === 'MANAGING' ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
                                 <Clock size={10} className="animate-spin text-amber-400" />
-                                Gestionando {trade.riskAmount ? `(-$${Number(trade.riskAmount).toFixed(2)})` : ''}
+                                Gestionando {trade.frozenLoss ? `(-$${Number(trade.frozenLoss).toFixed(2)})` : (trade.riskAmount ? `(-$${Number(trade.riskAmount).toFixed(2)})` : '')}
                               </span>
                             ) : trade.hedgeStatus === 'WIN' ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/30">
-                                Hedge WIN {trade.hedgePnl ? `(+$${trade.hedgePnl})` : ''}
+                                Hedge WIN {trade.hedgePnl ? `(+$${Number(trade.hedgePnl).toFixed(2)})` : ''}
                               </span>
                             ) : trade.hedgeStatus === 'LOSS' ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30">
-                                Hedge LOSS {trade.hedgePnl ? `(-$${Math.abs(Number(trade.hedgePnl))})` : ''}
+                                Hedge LOSS {trade.hedgePnl ? `(-$${Math.abs(Number(trade.hedgePnl)).toFixed(2)})` : ''}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/30">
@@ -348,17 +348,23 @@ export default function TradesPage() {
                       {trade.hedgeStatus === 'MANAGING' ? (
                         <div className="flex flex-col">
                           <span className="text-amber-400 font-bold">
-                            -${trade.riskAmount && !isNaN(Number(trade.riskAmount))
-                              ? Number(trade.riskAmount).toFixed(2)
-                              : (trade.stopLoss && trade.entryPrice && trade.size
-                                ? (Math.abs(Number(trade.entryPrice) - Number(trade.stopLoss)) * Number(trade.size)).toFixed(2)
-                                : '0.00')}
+                            -${trade.frozenLoss && !isNaN(Number(trade.frozenLoss))
+                              ? Number(trade.frozenLoss).toFixed(2)
+                              : (trade.riskAmount && !isNaN(Number(trade.riskAmount))
+                                ? Number(trade.riskAmount).toFixed(2)
+                                : (trade.stopLoss && trade.entryPrice && trade.size
+                                  ? (Math.abs(Number(trade.entryPrice) - Number(trade.stopLoss)) * Number(trade.size)).toFixed(2)
+                                  : '0.00'))}
                           </span>
-                          <span className="text-[10px] font-sans font-normal text-amber-400/70">Congelado</span>
+                          <span className="text-[10px] font-sans font-normal text-amber-400/80">Flotante</span>
                         </div>
-                      ) : trade.pnl ? (
+                      ) : trade.pnl !== null && trade.pnl !== undefined ? (
                         <span className={Number(trade.pnl) > 0 ? 'text-[#00FF7F]' : Number(trade.pnl) < 0 ? 'text-red-400' : 'text-gray-500'}>
-                          {Number(trade.pnl) > 0 ? '+' : ''}${Number(trade.pnl).toFixed(4)}
+                          {Number(trade.pnl) > 0 ? '+' : ''}${Number(trade.pnl).toFixed(2)}
+                        </span>
+                      ) : (trade.isHedge && trade.hedgeTriggered && ['WIN', 'LOSS', 'BREAKEVEN'].includes(trade.hedgeStatus) && trade.hedgePnl) ? (
+                        <span className={Number(trade.hedgePnl) > 0 ? 'text-[#00FF7F]' : Number(trade.hedgePnl) < 0 ? 'text-red-400' : 'text-gray-500'}>
+                          {Number(trade.hedgePnl) > 0 ? '+' : ''}${Number(trade.hedgePnl).toFixed(2)}
                         </span>
                       ) : (
                         <span className="text-gray-500">OPEN</span>

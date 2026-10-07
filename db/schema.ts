@@ -50,6 +50,7 @@ export const trades = pgTable('trades', {
   hedgeStatus: varchar('hedge_status', { length: 20 }), // 'NOT_TRIGGERED' | 'WIN' | 'LOSS' | 'BREAKEVEN' | 'MANAGING'
   hedgePnl: numeric('hedge_pnl'),
   hedgePnlPercent: numeric('hedge_pnl_percent'),
+  frozenLoss: numeric('frozen_loss'),
 });
 
 // -----------------------------------------------------------------------------

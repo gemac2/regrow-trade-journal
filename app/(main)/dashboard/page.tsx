@@ -144,9 +144,9 @@ export default function DashboardPage() {
                   Started with ${stats.initialBalance}
                 </span>
                 {stats.totalFrozenLoss && Number(stats.totalFrozenLoss) > 0 && (
-                  <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm" title="Cantidad congelada descontada del saldo mientras está en gestión">
+                  <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm" title="Flotante negativo pendiente descontado del balance mientras esté en gestión">
                     <Clock size={10} className="animate-spin text-amber-400" />
-                    -${stats.totalFrozenLoss} congelado ({stats.managingCount} en gestión)
+                    -${stats.totalFrozenLoss} flotante pendiente ({stats.managingCount} en gestión)
                   </span>
                 )}
               </div>

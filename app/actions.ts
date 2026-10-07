@@ -46,6 +46,14 @@ export async function getTrades(userId: string, accountId: number) {
   }
 }
 
+// Helper to parse numbers safely with comma or dot
+function parseNum(val: string | number | null | undefined): number | null {
+  if (val === null || val === undefined || val === '') return null;
+  const cleaned = String(val).trim().replace(',', '.');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
+}
+
 export async function createTrade(formData: FormData) {
   const userId = formData.get('userId') as string;
   const accountId = Number(formData.get('accountId'));
@@ -63,35 +71,78 @@ export async function createTrade(formData: FormData) {
   const isHedge = formData.get('isHedge') === 'true';
   const riskPercentage = (formData.get('riskPercentage') as string) || null;
   const riskAmount = (formData.get('riskAmount') as string) || null;
+  const frozenLossRaw = (formData.get('frozenLoss') as string) || null;
   const hedgeTriggered = isHedge ? formData.get('hedgeTriggered') === 'true' : false;
   const hedgeStatus = isHedge ? ((formData.get('hedgeStatus') as string) || (hedgeTriggered ? 'WIN' : 'NOT_TRIGGERED')) : null;
-  const hedgePnl = isHedge && hedgeTriggered ? ((formData.get('hedgePnl') as string) || null) : null;
-  const hedgePnlPercent = isHedge && hedgeTriggered ? ((formData.get('hedgePnlPercent') as string) || null) : null;
+  const hedgePnlRaw = isHedge && hedgeTriggered ? ((formData.get('hedgePnl') as string) || null) : null;
+  const hedgePnlPercentRaw = isHedge && hedgeTriggered ? ((formData.get('hedgePnlPercent') as string) || null) : null;
 
-  let pnl = null;
+  // Process hedge PnL and %
+  let hedgePnlNum: number | null = null;
+  let hedgePnlStr: string | null = null;
+  let hedgePnlPercentStr: string | null = null;
+
+  if (isHedge && hedgeTriggered && hedgeStatus && hedgeStatus !== 'MANAGING') {
+    const rawPnl = parseNum(hedgePnlRaw);
+    const rawPct = parseNum(hedgePnlPercentRaw);
+
+    if (rawPnl !== null) {
+      if (hedgeStatus === 'LOSS') hedgePnlNum = -Math.abs(rawPnl);
+      else if (hedgeStatus === 'WIN') hedgePnlNum = Math.abs(rawPnl);
+      else hedgePnlNum = 0;
+      hedgePnlStr = hedgePnlNum.toString();
+    } else if (hedgeStatus === 'BREAKEVEN') {
+      hedgePnlNum = 0;
+      hedgePnlStr = '0';
+    }
+
+    if (rawPct !== null) {
+      let pct = rawPct;
+      if (hedgeStatus === 'LOSS') pct = -Math.abs(rawPct);
+      else if (hedgeStatus === 'WIN') pct = Math.abs(rawPct);
+      else if (hedgeStatus === 'BREAKEVEN') pct = 0;
+      hedgePnlPercentStr = pct.toString();
+    }
+  }
+
+  // Frozen loss (solo para MANAGING)
+  let frozenLossStr: string | null = null;
+  if (isHedge && hedgeTriggered && hedgeStatus === 'MANAGING') {
+    const flNum = parseNum(frozenLossRaw);
+    if (flNum !== null && flNum > 0) {
+      frozenLossStr = Math.abs(flNum).toString();
+    } else if (parseNum(riskAmount)) {
+      frozenLossStr = Math.abs(parseNum(riskAmount)!).toString();
+    }
+  }
+
+  let pnl: number | null = null;
   let status = 'OPEN';
   let exitDate: Date | null = null;
 
-  if (exitPrice && hedgeStatus !== 'MANAGING') {
-    const entry = parseFloat(entryPrice);
-    const exit = parseFloat(exitPrice);
-    const positionSize = parseFloat(size);
+  if (hedgeStatus === 'MANAGING') {
+    status = 'OPEN';
+    pnl = null;
+    exitDate = null;
+  } else if (exitPrice) {
+    const entry = parseNum(entryPrice) || 0;
+    const exit = parseNum(exitPrice) || 0;
+    const positionSize = parseNum(size) || 0;
     let totalPnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
 
-    // Sumar el resultado de la cobertura al PnL total del trade si aplica
-    if (isHedge && hedgeTriggered && hedgePnl) {
-      const extraHedgePnl = parseFloat(hedgePnl);
-      if (!isNaN(extraHedgePnl)) {
-        totalPnl += extraHedgePnl;
-      }
+    if (hedgePnlNum !== null) {
+      totalPnl += hedgePnlNum;
     }
     
     pnl = totalPnl;
-    
     if (pnl > 0) status = 'WIN';
     else if (pnl < 0) status = 'LOSS';
     else status = 'BREAKEVEN';
 
+    exitDate = new Date();
+  } else if (isHedge && hedgeTriggered && ['WIN', 'LOSS', 'BREAKEVEN'].includes(hedgeStatus || '')) {
+    pnl = hedgePnlNum !== null ? hedgePnlNum : 0;
+    status = hedgeStatus!;
     exitDate = new Date();
   }
 
@@ -113,10 +164,11 @@ export async function createTrade(formData: FormData) {
       isHedge,
       riskPercentage,
       riskAmount,
+      frozenLoss: hedgeStatus === 'MANAGING' ? frozenLossStr : null,
       hedgeTriggered,
       hedgeStatus,
-      hedgePnl: hedgeStatus === 'MANAGING' ? null : hedgePnl,
-      hedgePnlPercent: hedgeStatus === 'MANAGING' ? null : hedgePnlPercent,
+      hedgePnl: hedgeStatus === 'MANAGING' ? null : hedgePnlStr,
+      hedgePnlPercent: hedgeStatus === 'MANAGING' ? null : hedgePnlPercentStr,
     });
     revalidatePath('/');
     return { success: true };
@@ -142,35 +194,78 @@ export async function updateTrade(formData: FormData) {
     const isHedge = formData.get('isHedge') === 'true';
     const riskPercentage = (formData.get('riskPercentage') as string) || null;
     const riskAmount = (formData.get('riskAmount') as string) || null;
+    const frozenLossRaw = (formData.get('frozenLoss') as string) || null;
     const hedgeTriggered = isHedge ? formData.get('hedgeTriggered') === 'true' : false;
     const hedgeStatus = isHedge ? ((formData.get('hedgeStatus') as string) || (hedgeTriggered ? 'WIN' : 'NOT_TRIGGERED')) : null;
-    const hedgePnl = isHedge && hedgeTriggered ? ((formData.get('hedgePnl') as string) || null) : null;
-    const hedgePnlPercent = isHedge && hedgeTriggered ? ((formData.get('hedgePnlPercent') as string) || null) : null;
+    const hedgePnlRaw = isHedge && hedgeTriggered ? ((formData.get('hedgePnl') as string) || null) : null;
+    const hedgePnlPercentRaw = isHedge && hedgeTriggered ? ((formData.get('hedgePnlPercent') as string) || null) : null;
+
+    // Process hedge PnL and %
+    let hedgePnlNum: number | null = null;
+    let hedgePnlStr: string | null = null;
+    let hedgePnlPercentStr: string | null = null;
+
+    if (isHedge && hedgeTriggered && hedgeStatus && hedgeStatus !== 'MANAGING') {
+      const rawPnl = parseNum(hedgePnlRaw);
+      const rawPct = parseNum(hedgePnlPercentRaw);
+
+      if (rawPnl !== null) {
+        if (hedgeStatus === 'LOSS') hedgePnlNum = -Math.abs(rawPnl);
+        else if (hedgeStatus === 'WIN') hedgePnlNum = Math.abs(rawPnl);
+        else hedgePnlNum = 0;
+        hedgePnlStr = hedgePnlNum.toString();
+      } else if (hedgeStatus === 'BREAKEVEN') {
+        hedgePnlNum = 0;
+        hedgePnlStr = '0';
+      }
+
+      if (rawPct !== null) {
+        let pct = rawPct;
+        if (hedgeStatus === 'LOSS') pct = -Math.abs(rawPct);
+        else if (hedgeStatus === 'WIN') pct = Math.abs(rawPct);
+        else if (hedgeStatus === 'BREAKEVEN') pct = 0;
+        hedgePnlPercentStr = pct.toString();
+      }
+    }
+
+    // Frozen loss (solo para MANAGING)
+    let frozenLossStr: string | null = null;
+    if (isHedge && hedgeTriggered && hedgeStatus === 'MANAGING') {
+      const flNum = parseNum(frozenLossRaw);
+      if (flNum !== null && flNum > 0) {
+        frozenLossStr = Math.abs(flNum).toString();
+      } else if (parseNum(riskAmount)) {
+        frozenLossStr = Math.abs(parseNum(riskAmount)!).toString();
+      }
+    }
     
-    let pnl = null;
+    let pnl: number | null = null;
     let status = 'OPEN';
     let exitDate: Date | null = null;
 
-    if (exitPrice && hedgeStatus !== 'MANAGING') {
-      const entry = parseFloat(entryPrice);
-      const exit = parseFloat(exitPrice);
-      const positionSize = parseFloat(size);
-      
+    if (hedgeStatus === 'MANAGING') {
+      status = 'OPEN';
+      pnl = null;
+      exitDate = null;
+    } else if (exitPrice) {
+      const entry = parseNum(entryPrice) || 0;
+      const exit = parseNum(exitPrice) || 0;
+      const positionSize = parseNum(size) || 0;
       let totalPnl = (exit - entry) * positionSize * (type === 'LONG' ? 1 : -1);
 
-      if (isHedge && hedgeTriggered && hedgePnl) {
-        const extraHedgePnl = parseFloat(hedgePnl);
-        if (!isNaN(extraHedgePnl)) {
-          totalPnl += extraHedgePnl;
-        }
+      if (hedgePnlNum !== null) {
+        totalPnl += hedgePnlNum;
       }
 
       pnl = totalPnl;
-      
       if (pnl > 0) status = 'WIN';
       else if (pnl < 0) status = 'LOSS';
       else status = 'BREAKEVEN';
 
+      exitDate = new Date();
+    } else if (isHedge && hedgeTriggered && ['WIN', 'LOSS', 'BREAKEVEN'].includes(hedgeStatus || '')) {
+      pnl = hedgePnlNum !== null ? hedgePnlNum : 0;
+      status = hedgeStatus!;
       exitDate = new Date();
     }
   
@@ -186,14 +281,15 @@ export async function updateTrade(formData: FormData) {
         stopLoss,
         takeProfit,
         status: hedgeStatus === 'MANAGING' ? 'OPEN' : status,
-        exitDate: hedgeStatus === 'MANAGING' ? null : (exitPrice ? exitDate : null),
+        exitDate: hedgeStatus === 'MANAGING' ? null : (exitPrice || (isHedge && hedgeTriggered && hedgeStatus !== 'MANAGING') ? exitDate : null),
         isHedge,
         riskPercentage,
         riskAmount,
+        frozenLoss: hedgeStatus === 'MANAGING' ? frozenLossStr : null,
         hedgeTriggered,
         hedgeStatus,
-        hedgePnl: hedgeStatus === 'MANAGING' ? null : hedgePnl,
-        hedgePnlPercent: hedgeStatus === 'MANAGING' ? null : hedgePnlPercent,
+        hedgePnl: hedgeStatus === 'MANAGING' ? null : hedgePnlStr,
+        hedgePnlPercent: hedgeStatus === 'MANAGING' ? null : hedgePnlPercentStr,
       };
 
       await db.update(trades).set(updateData).where(eq(trades.id, id));
@@ -229,19 +325,24 @@ export async function getStats(userId: string, accountId: number) {
     
     const initialBalance = Number(account.initialBalance);
 
-    const closedTrades = await db.select().from(trades)
-      .where(and(eq(trades.userId, userId), eq(trades.accountId, accountId), isNotNull(trades.exitPrice)))
-      .orderBy(trades.exitDate);
+    // Obtener todos los trades de la cuenta
+    const accountTrades = await db.select().from(trades)
+      .where(and(eq(trades.userId, userId), eq(trades.accountId, accountId)))
+      .orderBy(trades.entryDate);
 
     // Trades currently being managed in Hedge Mode (cobertura activada y en gestión)
-    const managingTrades = await db.select().from(trades)
-      .where(and(
-        eq(trades.userId, userId), 
-        eq(trades.accountId, accountId),
-        eq(trades.isHedge, true),
-        eq(trades.hedgeTriggered, true),
-        eq(trades.hedgeStatus, 'MANAGING')
-      ));
+    const managingTrades = accountTrades.filter(t => 
+      t.isHedge && t.hedgeTriggered && t.hedgeStatus === 'MANAGING'
+    );
+
+    // Trades cerrados o con resultado definido (no en gestión activa)
+    const closedTrades = accountTrades.filter(t => {
+      if (t.isHedge && t.hedgeTriggered && t.hedgeStatus === 'MANAGING') return false;
+      return t.pnl !== null || 
+             (t.status && t.status !== 'OPEN') || 
+             t.exitPrice !== null || 
+             (t.isHedge && t.hedgeTriggered && ['WIN', 'LOSS', 'BREAKEVEN'].includes(t.hedgeStatus || ''));
+    });
 
     let netPnL = 0;
     let grossProfit = 0;
@@ -252,7 +353,18 @@ export async function getStats(userId: string, accountId: number) {
     let currentBalance = initialBalance;
 
     closedTrades.forEach(trade => {
-      const pnl = Number(trade.pnl);
+      let pnl = 0;
+      if (trade.pnl !== null) {
+        pnl = Number(trade.pnl);
+      } else if (trade.isHedge && trade.hedgeTriggered && trade.hedgePnl !== null) {
+        pnl = Number(trade.hedgePnl);
+      } else if (trade.exitPrice && trade.entryPrice && trade.size) {
+        const entry = Number(trade.entryPrice);
+        const exit = Number(trade.exitPrice);
+        const sz = Number(trade.size);
+        pnl = (exit - entry) * sz * (trade.type === 'LONG' ? 1 : -1);
+      }
+
       netPnL += pnl;
       currentBalance += pnl;
 
@@ -260,17 +372,19 @@ export async function getStats(userId: string, accountId: number) {
       else { grossLoss += Math.abs(pnl); }
 
       chartData.push({
-        date: trade.exitDate ? new Date(trade.exitDate).toLocaleDateString() : 'N/A',
+        date: trade.exitDate ? new Date(trade.exitDate).toLocaleDateString() : (trade.entryDate ? new Date(trade.entryDate).toLocaleDateString() : 'N/A'),
         balance: Number(currentBalance.toFixed(2)),
-        pnl: pnl
+        pnl: Number(pnl.toFixed(2))
       });
     });
 
-    // Calcular la cantidad congelada que se está perdiendo en coberturas en gestión
+    // Calcular la cantidad congelada que se está perdiendo en coberturas en gestión (flotante pendiente)
     let totalFrozenLoss = 0;
     managingTrades.forEach(trade => {
       let loss = 0;
-      if (trade.riskAmount && !isNaN(Number(trade.riskAmount)) && Number(trade.riskAmount) > 0) {
+      if (trade.frozenLoss && !isNaN(Number(trade.frozenLoss)) && Number(trade.frozenLoss) > 0) {
+        loss = Number(trade.frozenLoss);
+      } else if (trade.riskAmount && !isNaN(Number(trade.riskAmount)) && Number(trade.riskAmount) > 0) {
         loss = Number(trade.riskAmount);
       } else if (trade.hedgePnl && !isNaN(Number(trade.hedgePnl)) && Number(trade.hedgePnl) !== 0) {
         loss = Math.abs(Number(trade.hedgePnl));
@@ -285,12 +399,12 @@ export async function getStats(userId: string, accountId: number) {
       totalFrozenLoss += loss;
     });
 
-    // Descontar la pérdida congelada del saldo actual de la cuenta
+    // Descontar el flotante pendiente del saldo actual de la cuenta
     currentBalance -= totalFrozenLoss;
 
     if (totalFrozenLoss > 0) {
       chartData.push({
-        date: 'En Gestión',
+        date: 'Flotante Pendiente',
         balance: Number(currentBalance.toFixed(2)),
         pnl: -Number(totalFrozenLoss.toFixed(2))
       });
@@ -338,30 +452,43 @@ export async function updateInitialBalance(userId: string, accountId: number, ne
 
 export async function getCalendarData(userId: string, accountId: number) {
   try {
-    const closedTrades = await db.select({
+    const accountTrades = await db.select({
+      entryDate: trades.entryDate,
       exitDate: trades.exitDate,
-      pnl: trades.pnl
+      pnl: trades.pnl,
+      isHedge: trades.isHedge,
+      hedgeTriggered: trades.hedgeTriggered,
+      hedgeStatus: trades.hedgeStatus,
+      hedgePnl: trades.hedgePnl
     })
     .from(trades)
     .where(and(
       eq(trades.userId, userId),
-      eq(trades.accountId, accountId),
-      isNotNull(trades.exitDate),
-      isNotNull(trades.pnl)
+      eq(trades.accountId, accountId)
     ));
 
     const dailyData: Record<string, number> = {};
 
-    closedTrades.forEach(trade => {
-      if (!trade.exitDate) return;
-      const dateKey = new Date(trade.exitDate).toISOString().split('T')[0];
+    accountTrades.forEach(trade => {
+      if (trade.isHedge && trade.hedgeTriggered && trade.hedgeStatus === 'MANAGING') return;
+      let pnl: number | null = null;
+      if (trade.pnl !== null) {
+        pnl = Number(trade.pnl);
+      } else if (trade.isHedge && trade.hedgeTriggered && trade.hedgePnl !== null) {
+        pnl = Number(trade.hedgePnl);
+      }
+      if (pnl === null) return;
+
+      const dateObj = trade.exitDate || trade.entryDate;
+      if (!dateObj) return;
+      const dateKey = new Date(dateObj).toISOString().split('T')[0];
       if (!dailyData[dateKey]) dailyData[dateKey] = 0;
-      dailyData[dateKey] += Number(trade.pnl);
+      dailyData[dateKey] += pnl;
     });
 
     const result = Object.entries(dailyData).map(([date, pnl]) => ({
       date,
-      pnl
+      pnl: Number(pnl.toFixed(2))
     }));
 
     return { success: true, data: result };
@@ -374,22 +501,27 @@ export async function getCalendarData(userId: string, accountId: number) {
 
 export async function getStrategyStats(userId: string, accountId: number) {
   try {
-    const winningTrades = await db.select({
+    const accountTrades = await db.select({
       strategy: trades.strategy,
-      pnl: trades.pnl
+      pnl: trades.pnl,
+      isHedge: trades.isHedge,
+      hedgeTriggered: trades.hedgeTriggered,
+      hedgePnl: trades.hedgePnl,
+      hedgeStatus: trades.hedgeStatus
     })
     .from(trades)
     .where(and(
       eq(trades.userId, userId),
       eq(trades.accountId, accountId),
-      isNotNull(trades.pnl),
       isNotNull(trades.strategy)
     ));
 
     const strategyMap: Record<string, number> = {};
 
-    winningTrades.forEach(t => {
-      const pnl = Number(t.pnl);
+    accountTrades.forEach(t => {
+      let pnl = 0;
+      if (t.pnl !== null) pnl = Number(t.pnl);
+      else if (t.isHedge && t.hedgeTriggered && t.hedgePnl !== null) pnl = Number(t.hedgePnl);
       if (pnl <= 0) return; 
       const strat = t.strategy || "Unknown";
       if (!strategyMap[strat]) strategyMap[strat] = 0;
@@ -454,7 +586,9 @@ export async function getHedgeStats(userId: string, accountId: number) {
         if (trade.hedgeStatus === 'MANAGING') {
           managingCount++;
           let loss = 0;
-          if (trade.riskAmount && !isNaN(Number(trade.riskAmount)) && Number(trade.riskAmount) > 0) {
+          if (trade.frozenLoss && !isNaN(Number(trade.frozenLoss)) && Number(trade.frozenLoss) > 0) {
+            loss = Number(trade.frozenLoss);
+          } else if (trade.riskAmount && !isNaN(Number(trade.riskAmount)) && Number(trade.riskAmount) > 0) {
             loss = Number(trade.riskAmount);
           } else if (trade.hedgePnl && !isNaN(Number(trade.hedgePnl)) && Number(trade.hedgePnl) !== 0) {
             loss = Math.abs(Number(trade.hedgePnl));
@@ -468,7 +602,7 @@ export async function getHedgeStats(userId: string, accountId: number) {
           }
           totalManagingFrozenLoss += loss;
         } else {
-          const pnl = trade.hedgePnl ? parseFloat(trade.hedgePnl) : 0;
+          const pnl = trade.hedgePnl ? parseFloat(trade.hedgePnl) : (trade.pnl ? parseFloat(trade.pnl) : 0);
           totalHedgePnl += pnl;
 
           if (trade.hedgeStatus === 'WIN') {
