@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
 import { useAccount } from '@/app/context/AccountContext';
 import { getTrades, deleteTrade, getStats, getHedgeStats } from '@/app/actions';
-import { exportStatisticsCSV } from '@/app/lib/exportCsv';
+import { exportStatisticsCSV, exportStatisticsExcel } from '@/app/lib/exportCsv';
 import { TradeModal } from '@/components/TradeModal';
 import { DeleteTradeModal } from '@/components/DeleteTradeModal';
 import { 
@@ -20,7 +20,8 @@ import {
   ChevronRight,
   Loader2,
   Clock,
-  Download
+  Download,
+  FileSpreadsheet
 } from 'lucide-react';
 
 export default function TradesPage() {
@@ -85,7 +86,32 @@ export default function TradesPage() {
     setIsModalOpen(true);
   }
 
-  // --- CSV EXPORT LOGIC ---
+  // --- EXPORT LOGIC: EXCEL CON COLORES REGROW Y CSV ---
+  async function handleDownloadExcel() {
+    if (!user || !selectedAccount || isExporting) return;
+    setIsExporting(true);
+    try {
+      const [statsRes, hedgeRes] = await Promise.all([
+        getStats(user.id, selectedAccount.id),
+        getHedgeStats(user.id, selectedAccount.id)
+      ]);
+      await exportStatisticsExcel({
+        accountName: selectedAccount.name,
+        stats: statsRes.success ? (statsRes.data as any) : null,
+        hedgeData: hedgeRes.success ? (hedgeRes.data as any) : null,
+        trades: trades
+      });
+    } catch (err) {
+      console.error("Error exporting Excel:", err);
+      exportStatisticsCSV({
+        accountName: selectedAccount.name,
+        trades: trades
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   async function handleDownloadCSV() {
     if (!user || !selectedAccount || isExporting) return;
     setIsExporting(true);
@@ -164,16 +190,27 @@ export default function TradesPage() {
           </h1>
           <p className="text-gray-400">Manage, hedge and review your trading history.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button 
+            onClick={handleDownloadExcel}
+            disabled={isExporting}
+            className="bg-gradient-to-r from-[#002BDC] to-[#00A3FF] hover:from-[#0022B8] hover:to-[#008FE0] text-white px-4 py-2.5 rounded-xl text-sm font-bold border border-[#00A3FF]/40 transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-md shadow-blue-950/30"
+            title="Descargar reporte completo en Excel (.xlsx) con los colores y estilos oficiales de Regrow Code"
+          >
+            {isExporting ? <Loader2 size={16} className="animate-spin text-white" /> : <FileSpreadsheet size={16} className="text-[#00FF7F]" />}
+            <span>{isExporting ? 'Generando...' : 'Descargar Excel (.xlsx)'}</span>
+          </button>
+
           <button 
             onClick={handleDownloadCSV}
             disabled={isExporting}
-            className="flex items-center gap-2 bg-[#1e2329] hover:bg-[#282f37] text-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-700 hover:border-gray-600 transition disabled:opacity-50 cursor-pointer shadow-sm"
-            title="Descargar reporte completo en CSV con estadísticas y operaciones"
+            className="bg-[#1e2329] hover:bg-[#282f37] text-gray-300 hover:text-white px-3 py-2.5 rounded-xl text-sm font-medium border border-gray-700 hover:border-gray-600 transition disabled:opacity-50 cursor-pointer shadow-sm flex items-center gap-1.5"
+            title="Descargar en formato CSV plano"
           >
-            {isExporting ? <Loader2 size={16} className="animate-spin text-[#00A3FF]" /> : <Download size={16} className="text-[#00A3FF]" />}
-            <span>{isExporting ? 'Exportando...' : 'Descargar CSV'}</span>
+            <Download size={15} />
+            <span>CSV</span>
           </button>
+
           <button 
             onClick={handleCreate}
             className="flex items-center gap-2 bg-[#00FF7F] text-black px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#00e676] transition shadow-[0_0_20px_rgba(0,255,127,0.2)] cursor-pointer"

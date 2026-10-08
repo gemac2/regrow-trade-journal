@@ -10,10 +10,11 @@ import {
   MinusCircle, 
   Clock, 
   Download, 
-  Loader2 
+  Loader2,
+  FileSpreadsheet
 } from 'lucide-react';
 import { getTrades } from '@/app/actions';
-import { exportStatisticsCSV, TradeExportItem } from '@/app/lib/exportCsv';
+import { exportStatisticsCSV, exportStatisticsExcel, TradeExportItem } from '@/app/lib/exportCsv';
 
 interface HedgeData {
   totalHedgeTrades: number;
@@ -62,6 +63,36 @@ export function HedgeAnalytics({
   stats 
 }: HedgeAnalyticsProps) {
   const [isExporting, setIsExporting] = useState(false);
+
+  async function handleDownloadExcel() {
+    if (!data || isExporting) return;
+    setIsExporting(true);
+    try {
+      let tradesList: TradeExportItem[] = [];
+      if (userId && accountId) {
+        const res = await getTrades(userId, accountId);
+        if (res.success && res.data) {
+          tradesList = res.data;
+        }
+      }
+      await exportStatisticsExcel({
+        accountName,
+        stats: stats || null,
+        hedgeData: data,
+        trades: tradesList
+      });
+    } catch (err) {
+      console.error('Error exporting Excel from HedgeAnalytics:', err);
+      exportStatisticsCSV({
+        accountName,
+        stats: stats || null,
+        hedgeData: data,
+        trades: []
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   async function handleDownloadCSV() {
     if (!data || isExporting) return;
@@ -167,15 +198,28 @@ export function HedgeAnalytics({
             )}
           </div>
 
-          <button
-            onClick={handleDownloadCSV}
-            disabled={isExporting}
-            className="bg-[#0b0e11] hover:bg-[#161c24] text-gray-200 px-3.5 py-2 rounded-xl border border-gray-700 hover:border-gray-600 transition flex items-center gap-2 text-xs font-semibold cursor-pointer disabled:opacity-50 shadow-sm"
-            title="Descargar estadísticas de cobertura y operaciones en formato CSV compatible con Excel"
-          >
-            {isExporting ? <Loader2 size={14} className="animate-spin text-[#00A3FF]" /> : <Download size={14} className="text-[#00A3FF]" />}
-            <span>{isExporting ? 'Exportando...' : 'Descargar CSV'}</span>
-          </button>
+          {/* Botones de Descarga: Excel con Colores Regrow y CSV */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadExcel}
+              disabled={isExporting}
+              className="bg-gradient-to-r from-[#002BDC] to-[#00A3FF] hover:from-[#0022B8] hover:to-[#008FE0] text-white px-3.5 py-1.5 rounded-xl border border-[#00A3FF]/40 transition flex items-center gap-2 text-xs font-bold cursor-pointer disabled:opacity-50 shadow-md shadow-blue-950/30"
+              title="Descargar reporte completo en Excel (.xlsx) con los colores y estilos oficiales de Regrow Code"
+            >
+              {isExporting ? <Loader2 size={14} className="animate-spin text-white" /> : <FileSpreadsheet size={14} className="text-[#00FF7F]" />}
+              <span>{isExporting ? 'Generando...' : 'Descargar Excel (.xlsx)'}</span>
+            </button>
+
+            <button
+              onClick={handleDownloadCSV}
+              disabled={isExporting}
+              className="bg-[#0b0e11] hover:bg-[#161c24] text-gray-400 hover:text-white px-2.5 py-1.5 rounded-xl border border-gray-800 hover:border-gray-700 transition flex items-center gap-1.5 text-xs font-medium cursor-pointer disabled:opacity-50"
+              title="Descargar en formato CSV plano"
+            >
+              <Download size={13} />
+              <span>CSV</span>
+            </button>
+          </div>
         </div>
       </div>
 
