@@ -1,7 +1,19 @@
 // components/HedgeAnalytics.tsx
 'use client';
 
-import { ShieldCheck, ShieldAlert, ArrowRightLeft, Percent, Wallet, Layers, CheckCircle2, XCircle, MinusCircle, HelpCircle, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { 
+  ShieldCheck, 
+  Layers, 
+  CheckCircle2, 
+  XCircle, 
+  MinusCircle, 
+  Clock, 
+  Download, 
+  Loader2 
+} from 'lucide-react';
+import { getTrades } from '@/app/actions';
+import { exportStatisticsCSV, TradeExportItem } from '@/app/lib/exportCsv';
 
 interface HedgeData {
   totalHedgeTrades: number;
@@ -22,14 +34,65 @@ interface HedgeData {
   totalHedgeLossesPnl: string;
   totalManagingFrozenLoss?: string;
   avgRiskPercent: string;
+  initialAvgRiskPercent?: string;
 }
 
 interface HedgeAnalyticsProps {
   data: HedgeData | null;
   loading?: boolean;
+  accountName?: string;
+  userId?: string;
+  accountId?: number;
+  stats?: {
+    netPnL: string;
+    winRate: string;
+    profitFactor: string;
+    totalTrades: number;
+    currentBalance: string;
+    initialBalance: string;
+  } | null;
 }
 
-export function HedgeAnalytics({ data, loading }: HedgeAnalyticsProps) {
+export function HedgeAnalytics({ 
+  data, 
+  loading, 
+  accountName = 'Cuenta Principal', 
+  userId, 
+  accountId, 
+  stats 
+}: HedgeAnalyticsProps) {
+  const [isExporting, setIsExporting] = useState(false);
+
+  async function handleDownloadCSV() {
+    if (!data || isExporting) return;
+    setIsExporting(true);
+    try {
+      let tradesList: TradeExportItem[] = [];
+      if (userId && accountId) {
+        const res = await getTrades(userId, accountId);
+        if (res.success && res.data) {
+          tradesList = res.data;
+        }
+      }
+      exportStatisticsCSV({
+        accountName,
+        stats: stats || null,
+        hedgeData: data,
+        trades: tradesList
+      });
+    } catch (err) {
+      console.error('Error exporting CSV from HedgeAnalytics:', err);
+      exportStatisticsCSV({
+        accountName,
+        stats: stats || null,
+        hedgeData: data,
+        trades: []
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="bg-[#1e2329] p-6 rounded-2xl border border-gray-800 animate-pulse space-y-4">
@@ -76,25 +139,47 @@ export function HedgeAnalytics({ data, loading }: HedgeAnalyticsProps) {
                 Hedge Analytics <span className="text-xs font-normal text-gray-500 uppercase tracking-wider">Estadísticas de Cobertura</span>
               </h2>
               <p className="text-xs text-gray-400">
-                Métricas detalladas sobre operaciones en modo cobertura, ratio de activación y PnL de hedge
+                Métricas detalladas sobre operaciones en modo cobertura, conteos de resultado y PnL de hedge
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Badges de resumen y Botón Descargar CSV */}
+        <div className="flex flex-wrap items-center gap-3">
           <div className="bg-[#0b0e11] px-3.5 py-1.5 rounded-xl border border-gray-800 flex items-center gap-2">
             <span className="text-[11px] text-gray-500 uppercase font-semibold">Total Hedge</span>
             <span className="text-sm font-bold text-white font-mono">{data.totalHedgeTrades} ops</span>
           </div>
-          <div className="bg-[#0b0e11] px-3.5 py-1.5 rounded-xl border border-gray-800 flex items-center gap-2">
-            <span className="text-[11px] text-gray-500 uppercase font-semibold">Riesgo Promedio</span>
-            <span className="text-sm font-bold text-[#00A3FF] font-mono">{data.avgRiskPercent}%</span>
+
+          <div 
+            className="bg-[#0b0e11] px-3.5 py-1.5 rounded-xl border border-gray-800 flex flex-col justify-center"
+            title={data.initialAvgRiskPercent ? `Riesgo inicial programado: ${data.initialAvgRiskPercent}% | Riesgo efectivo tras cobertura: ${data.avgRiskPercent}%` : undefined}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-500 uppercase font-semibold">Riesgo Promedio</span>
+              <span className="text-sm font-bold text-[#00A3FF] font-mono">{data.avgRiskPercent}%</span>
+            </div>
+            {data.initialAvgRiskPercent && data.initialAvgRiskPercent !== data.avgRiskPercent && (
+              <span className="text-[9px] text-gray-400 font-mono">
+                Real post-cobertura (Inicial: {data.initialAvgRiskPercent}%)
+              </span>
+            )}
           </div>
+
+          <button
+            onClick={handleDownloadCSV}
+            disabled={isExporting}
+            className="bg-[#0b0e11] hover:bg-[#161c24] text-gray-200 px-3.5 py-2 rounded-xl border border-gray-700 hover:border-gray-600 transition flex items-center gap-2 text-xs font-semibold cursor-pointer disabled:opacity-50 shadow-sm"
+            title="Descargar estadísticas de cobertura y operaciones en formato CSV compatible con Excel"
+          >
+            {isExporting ? <Loader2 size={14} className="animate-spin text-[#00A3FF]" /> : <Download size={14} className="text-[#00A3FF]" />}
+            <span>{isExporting ? 'Exportando...' : 'Descargar CSV'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Grid de Métricas Principales */}
+      {/* Grid de Métricas Principales (Conteos exactos de operaciones) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* 1. NO TOCARON COBERTURA */}
@@ -274,13 +359,13 @@ export function HedgeAnalytics({ data, loading }: HedgeAnalyticsProps) {
           </div>
         </div>
 
-        {/* PnL Neto de Coberturas */}
+        {/* PnL Neto de Coberturas (Suma directa neta, sin ponderación) */}
         <div className="w-full md:w-auto min-w-[200px] bg-[#0b0e11] p-3 rounded-xl border border-gray-800 flex flex-col items-center md:items-end justify-center">
           <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">PnL Neto de Coberturas</span>
           <span className={`text-2xl font-mono font-bold ${netPnlColor}`}>
             {netPnlNum > 0 ? '+' : ''}${data.totalHedgePnl}
           </span>
-          <span className="text-[10px] text-gray-500">Impacto sumado al journal</span>
+          <span className="text-[10px] text-gray-500">Suma directa neta (Ganadas - Perdidas)</span>
         </div>
 
       </div>

@@ -483,11 +483,17 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                                 const val = e.target.value;
                                 setHedgePnl(val);
                                 // Sugerir % automáticamente si está vacío
-                                if (val && selectedAccount?.initialBalance && (!hedgePnlPercent || hedgePnlPercent === '')) {
-                                  const bal = parseFloat(selectedAccount.initialBalance);
+                                if (val && (!hedgePnlPercent || hedgePnlPercent === '')) {
                                   const num = parseFloat(val.replace(',', '.'));
-                                  if (!isNaN(bal) && bal > 0 && !isNaN(num)) {
-                                    setHedgePnlPercent(((num / bal) * 100).toFixed(2));
+                                  const rAmt = parseFloat(riskAmount.replace(',', '.'));
+                                  const rPct = parseFloat(riskPercentage.replace(',', '.'));
+                                  if (!isNaN(num) && !isNaN(rAmt) && !isNaN(rPct) && rAmt > 0) {
+                                    setHedgePnlPercent(((num / rAmt) * rPct).toFixed(2));
+                                  } else if (selectedAccount?.initialBalance) {
+                                    const bal = parseFloat(selectedAccount.initialBalance);
+                                    if (!isNaN(bal) && bal > 0 && !isNaN(num)) {
+                                      setHedgePnlPercent(((num / bal) * 100).toFixed(2));
+                                    }
                                   }
                                 }
                               }}
@@ -512,11 +518,17 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                                 const val = e.target.value;
                                 setHedgePnlPercent(val);
                                 // Sugerir $ automáticamente si está vacío
-                                if (val && selectedAccount?.initialBalance && (!hedgePnl || hedgePnl === '')) {
-                                  const bal = parseFloat(selectedAccount.initialBalance);
+                                if (val && (!hedgePnl || hedgePnl === '')) {
                                   const num = parseFloat(val.replace(',', '.'));
-                                  if (!isNaN(bal) && bal > 0 && !isNaN(num)) {
-                                    setHedgePnl((bal * (num / 100)).toFixed(2));
+                                  const rAmt = parseFloat(riskAmount.replace(',', '.'));
+                                  const rPct = parseFloat(riskPercentage.replace(',', '.'));
+                                  if (!isNaN(num) && !isNaN(rAmt) && !isNaN(rPct) && rPct > 0) {
+                                    setHedgePnl(((num / rPct) * rAmt).toFixed(2));
+                                  } else if (selectedAccount?.initialBalance) {
+                                    const bal = parseFloat(selectedAccount.initialBalance);
+                                    if (!isNaN(bal) && bal > 0 && !isNaN(num)) {
+                                      setHedgePnl((bal * (num / 100)).toFixed(2));
+                                    }
                                   }
                                 }
                               }}
@@ -532,7 +544,7 @@ export function TradeModal({ userId, accountId, isOpen, onClose, tradeToEdit }: 
                       </div>
 
                       <p className="text-[11px] text-gray-400 italic">
-                        ℹ️ El resultado de la cobertura actualizará directamente el balance de la cuenta y las estadísticas globales.
+                        ℹ️ Este porcentaje (% PnL Cobertura) es el que se contabiliza como riesgo real terminado en Hedge Analytics.
                       </p>
                     </div>
                   )}

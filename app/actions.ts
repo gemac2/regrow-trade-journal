@@ -102,6 +102,14 @@ export async function createTrade(formData: FormData) {
       else if (hedgeStatus === 'WIN') pct = Math.abs(rawPct);
       else if (hedgeStatus === 'BREAKEVEN') pct = 0;
       hedgePnlPercentStr = pct.toString();
+    } else if (hedgePnlNum !== null) {
+      // Cálculo automático si no se ingresó el porcentaje manualmente
+      const rAmount = parseNum(riskAmount);
+      const rPct = parseNum(riskPercentage);
+      if (rAmount && rPct && rAmount > 0) {
+        const pct = (hedgePnlNum / rAmount) * rPct;
+        hedgePnlPercentStr = pct.toFixed(2);
+      }
     }
   }
 
@@ -225,6 +233,14 @@ export async function updateTrade(formData: FormData) {
         else if (hedgeStatus === 'WIN') pct = Math.abs(rawPct);
         else if (hedgeStatus === 'BREAKEVEN') pct = 0;
         hedgePnlPercentStr = pct.toString();
+      } else if (hedgePnlNum !== null) {
+        // Cálculo automático si no se ingresó el porcentaje manualmente
+        const rAmount = parseNum(riskAmount);
+        const rPct = parseNum(riskPercentage);
+        if (rAmount && rPct && rAmount > 0) {
+          const pct = (hedgePnlNum / rAmount) * rPct;
+          hedgePnlPercentStr = pct.toFixed(2);
+        }
       }
     }
 
@@ -568,23 +584,43 @@ export async function getHedgeStats(userId: string, accountId: number) {
     let totalManagingFrozenLoss = 0;
     let sumRiskPercent = 0;
     let countRiskPercent = 0;
+    let sumInitialRiskPercent = 0;
+    let countInitialRiskPercent = 0;
 
     hedgeTrades.forEach(trade => {
+      // Registrar riesgo inicial teórico de cada trade
       if (trade.riskPercentage) {
-        const r = parseFloat(trade.riskPercentage);
-        if (!isNaN(r)) {
-          sumRiskPercent += r;
-          countRiskPercent++;
+        const initR = parseFloat(trade.riskPercentage);
+        if (!isNaN(initR)) {
+          sumInitialRiskPercent += initR;
+          countInitialRiskPercent++;
         }
       }
 
       if (!trade.hedgeTriggered || trade.hedgeStatus === 'NOT_TRIGGERED') {
         notTriggeredCount++;
+        // No tocó cobertura: el riesgo asumido es el riesgo definido inicial
+        if (trade.riskPercentage) {
+          const r = parseFloat(trade.riskPercentage);
+          if (!isNaN(r)) {
+            sumRiskPercent += r;
+            countRiskPercent++;
+          }
+        }
       } else {
         triggeredCount++;
 
         if (trade.hedgeStatus === 'MANAGING') {
           managingCount++;
+          // En gestión activa: cobertura abierta, se mantiene el riesgo inicial
+          if (trade.riskPercentage) {
+            const r = parseFloat(trade.riskPercentage);
+            if (!isNaN(r)) {
+              sumRiskPercent += r;
+              countRiskPercent++;
+            }
+          }
+
           let loss = 0;
           if (trade.frozenLoss && !isNaN(Number(trade.frozenLoss)) && Number(trade.frozenLoss) > 0) {
             loss = Number(trade.frozenLoss);
@@ -602,17 +638,36 @@ export async function getHedgeStats(userId: string, accountId: number) {
           }
           totalManagingFrozenLoss += loss;
         } else {
+          // Status diferente al de gestionando (WIN, LOSS, BREAKEVEN)
           const pnl = trade.hedgePnl ? parseFloat(trade.hedgePnl) : (trade.pnl ? parseFloat(trade.pnl) : 0);
           totalHedgePnl += pnl;
 
           if (trade.hedgeStatus === 'WIN') {
             winCount++;
             totalHedgeWinsPnl += Math.max(0, pnl);
+            // Cobertura ganada: 0% de riesgo perdido
+            sumRiskPercent += 0;
+            countRiskPercent++;
           } else if (trade.hedgeStatus === 'LOSS') {
             lossCount++;
             totalHedgeLossesPnl += Math.abs(Math.min(0, pnl));
+
+            // Cobertura perdida: tomar en cuenta el porcentaje que se terminó perdiendo (pnl cobertura %)
+            let lostPct = 0;
+            if (trade.hedgePnlPercent && !isNaN(parseFloat(trade.hedgePnlPercent))) {
+              lostPct = Math.abs(parseFloat(trade.hedgePnlPercent));
+            } else if (trade.hedgePnl && trade.riskAmount && trade.riskPercentage && parseFloat(trade.riskAmount) > 0) {
+              lostPct = (Math.abs(parseFloat(trade.hedgePnl)) / parseFloat(trade.riskAmount)) * parseFloat(trade.riskPercentage);
+            } else if (trade.riskPercentage) {
+              lostPct = parseFloat(trade.riskPercentage);
+            }
+            sumRiskPercent += lostPct;
+            countRiskPercent++;
           } else if (trade.hedgeStatus === 'BREAKEVEN') {
             breakevenCount++;
+            // Cobertura a Breakeven: 0% de riesgo perdido
+            sumRiskPercent += 0;
+            countRiskPercent++;
           }
         }
       }
@@ -625,7 +680,11 @@ export async function getHedgeStats(userId: string, accountId: number) {
     const lossRate = resolvedCount > 0 ? (lossCount / resolvedCount) * 100 : 0;
     const breakevenRate = resolvedCount > 0 ? (breakevenCount / resolvedCount) * 100 : 0;
     const managingRate = totalHedgeTrades > 0 ? (managingCount / totalHedgeTrades) * 100 : 0;
+    
+    // Riesgo promedio efectivo tomando en cuenta el % real perdido en coberturas cerradas
     const avgRiskPercent = countRiskPercent > 0 ? sumRiskPercent / countRiskPercent : 0;
+    // Riesgo inicial teórico promedio
+    const initialAvgRiskPercent = countInitialRiskPercent > 0 ? sumInitialRiskPercent / countInitialRiskPercent : 0;
 
     return {
       success: true,
@@ -648,6 +707,7 @@ export async function getHedgeStats(userId: string, accountId: number) {
         totalHedgeLossesPnl: totalHedgeLossesPnl.toFixed(2),
         totalManagingFrozenLoss: totalManagingFrozenLoss.toFixed(2),
         avgRiskPercent: avgRiskPercent.toFixed(2),
+        initialAvgRiskPercent: initialAvgRiskPercent.toFixed(2),
       }
     };
   } catch (error) {

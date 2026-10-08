@@ -4,7 +4,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/hooks/useAuth';
 import { useAccount } from '@/app/context/AccountContext';
-import { getTrades, deleteTrade } from '@/app/actions';
+import { getTrades, deleteTrade, getStats, getHedgeStats } from '@/app/actions';
+import { exportStatisticsCSV } from '@/app/lib/exportCsv';
 import { TradeModal } from '@/components/TradeModal';
 import { DeleteTradeModal } from '@/components/DeleteTradeModal';
 import { 
@@ -18,7 +19,8 @@ import {
   ChevronLeft, 
   ChevronRight,
   Loader2,
-  Clock 
+  Clock,
+  Download
 } from 'lucide-react';
 
 export default function TradesPage() {
@@ -36,6 +38,7 @@ export default function TradesPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [loadingData, setLoadingData] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Filters & Pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -80,6 +83,32 @@ export default function TradesPage() {
   function handleCreate() {
     setTradeToEdit(null);
     setIsModalOpen(true);
+  }
+
+  // --- CSV EXPORT LOGIC ---
+  async function handleDownloadCSV() {
+    if (!user || !selectedAccount || isExporting) return;
+    setIsExporting(true);
+    try {
+      const [statsRes, hedgeRes] = await Promise.all([
+        getStats(user.id, selectedAccount.id),
+        getHedgeStats(user.id, selectedAccount.id)
+      ]);
+      exportStatisticsCSV({
+        accountName: selectedAccount.name,
+        stats: statsRes.success ? (statsRes.data as any) : null,
+        hedgeData: hedgeRes.success ? (hedgeRes.data as any) : null,
+        trades: trades
+      });
+    } catch (err) {
+      console.error("Error exporting CSV:", err);
+      exportStatisticsCSV({
+        accountName: selectedAccount.name,
+        trades: trades
+      });
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   // Filtering Logic
@@ -135,12 +164,23 @@ export default function TradesPage() {
           </h1>
           <p className="text-gray-400">Manage, hedge and review your trading history.</p>
         </div>
-        <button 
-          onClick={handleCreate}
-          className="flex items-center gap-2 bg-[#00FF7F] text-black px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#00e676] transition shadow-[0_0_20px_rgba(0,255,127,0.2)]"
-        >
-          <Plus size={18} /> Add Trade
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleDownloadCSV}
+            disabled={isExporting}
+            className="flex items-center gap-2 bg-[#1e2329] hover:bg-[#282f37] text-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-700 hover:border-gray-600 transition disabled:opacity-50 cursor-pointer shadow-sm"
+            title="Descargar reporte completo en CSV con estadísticas y operaciones"
+          >
+            {isExporting ? <Loader2 size={16} className="animate-spin text-[#00A3FF]" /> : <Download size={16} className="text-[#00A3FF]" />}
+            <span>{isExporting ? 'Exportando...' : 'Descargar CSV'}</span>
+          </button>
+          <button 
+            onClick={handleCreate}
+            className="flex items-center gap-2 bg-[#00FF7F] text-black px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#00e676] transition shadow-[0_0_20px_rgba(0,255,127,0.2)] cursor-pointer"
+          >
+            <Plus size={18} /> Add Trade
+          </button>
+        </div>
       </div>
 
       {/* Hedge Quick Stats Ribbon */}
@@ -329,11 +369,38 @@ export default function TradesPage() {
                               </span>
                             )}
 
-                            {trade.riskPercentage && (
-                              <span className="text-[10px] font-mono text-gray-400 bg-[#0b0e11] px-1.5 py-0.5 rounded border border-gray-800">
+                            {/* Badge de Riesgo: Si la cobertura ya terminó (status != MANAGING), mostrar el % que se terminó perdiendo/ganando */}
+                            {trade.isHedge && trade.hedgeTriggered && trade.hedgeStatus && trade.hedgeStatus !== 'MANAGING' ? (
+                              trade.hedgeStatus === 'LOSS' ? (
+                                <span 
+                                  className="text-[10px] font-mono font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/30"
+                                  title={`Riesgo inicial programado: ${trade.riskPercentage || '0'}% | Riesgo real perdido en cobertura: -${trade.hedgePnlPercent ? Math.abs(Number(trade.hedgePnlPercent)).toFixed(2) : (trade.hedgePnl && trade.riskAmount && trade.riskPercentage && Number(trade.riskAmount) > 0 ? ((Math.abs(Number(trade.hedgePnl)) / Number(trade.riskAmount)) * Number(trade.riskPercentage)).toFixed(2) : Number(trade.riskPercentage || '0').toFixed(2))}%`}
+                                >
+                                  -{trade.hedgePnlPercent ? Math.abs(Number(trade.hedgePnlPercent)).toFixed(2) : (trade.hedgePnl && trade.riskAmount && trade.riskPercentage && Number(trade.riskAmount) > 0 ? ((Math.abs(Number(trade.hedgePnl)) / Number(trade.riskAmount)) * Number(trade.riskPercentage)).toFixed(2) : Number(trade.riskPercentage || '0').toFixed(2))}% rsk cob.
+                                </span>
+                              ) : trade.hedgeStatus === 'WIN' ? (
+                                <span 
+                                  className="text-[10px] font-mono font-bold text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/30"
+                                  title={`Riesgo inicial: ${trade.riskPercentage || '0'}% | Resultado cobertura: +${trade.hedgePnlPercent ? Math.abs(Number(trade.hedgePnlPercent)).toFixed(2) : '0.00'}%`}
+                                >
+                                  {trade.hedgePnlPercent ? `+${Math.abs(Number(trade.hedgePnlPercent)).toFixed(2)}% cob.` : '0.00% rsk'}
+                                </span>
+                              ) : (
+                                <span 
+                                  className="text-[10px] font-mono font-bold text-yellow-400 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/30"
+                                  title={`Riesgo inicial: ${trade.riskPercentage || '0'}% | Cobertura en Breakeven (0% pérdida)`}
+                                >
+                                  0.00% rsk (BE)
+                                </span>
+                              )
+                            ) : trade.riskPercentage ? (
+                              <span 
+                                className="text-[10px] font-mono text-gray-400 bg-[#0b0e11] px-1.5 py-0.5 rounded border border-gray-800"
+                                title={`Riesgo definido: ${trade.riskPercentage}%`}
+                              >
                                 {trade.riskPercentage}% rsk
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         )}
                       </div>

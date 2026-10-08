@@ -239,7 +239,14 @@ export default function DashboardPage() {
        </div>
 
        {/* --- HEDGE ANALYTICS (Full Width) --- */}
-       <HedgeAnalytics data={hedgeData} loading={loading} />
+       <HedgeAnalytics 
+         data={hedgeData} 
+         loading={loading} 
+         accountName={selectedAccount.name}
+         userId={user?.id}
+         accountId={selectedAccount.id}
+         stats={stats}
+       />
 
        {/* --- CALENDAR ROW (Full Width) --- */}
        <div className="grid grid-cols-1">
