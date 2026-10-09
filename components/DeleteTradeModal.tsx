@@ -14,47 +14,48 @@ export function DeleteTradeModal({ isOpen, onClose, onConfirm, isDeleting }: Del
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-sm rounded-2xl border border-red-500/30 bg-[#1e2329] p-6 shadow-[0_0_40px_-10px_rgba(239,68,68,0.3)] relative scale-100">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-150">
+      <div className="w-full max-w-sm rounded-3xl border border-rose-500/30 bg-[#121824] p-6 shadow-[0_0_50px_-10px_rgba(244,63,94,0.3)] relative animate-in zoom-in-95 duration-150">
         
         {/* Close Button */}
         <button 
           onClick={onClose} 
           disabled={isDeleting}
-          className="absolute top-4 right-4 text-gray-500 hover:text-white transition disabled:opacity-50"
+          className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition disabled:opacity-50 cursor-pointer"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
 
         <div className="flex flex-col items-center text-center space-y-4">
           
           {/* Icono de Alerta */}
-          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-2">
-            <AlertTriangle className="text-red-500" size={32} />
+          <div className="w-14 h-14 bg-rose-500/15 rounded-2xl flex items-center justify-center border border-rose-500/30">
+            <AlertTriangle className="text-rose-400" size={28} />
           </div>
 
-          <h3 className="text-xl font-bold text-white">Delete Trade?</h3>
-          
-          <p className="text-gray-400 text-sm">
-            Are you sure you want to remove this trade record? <br/>
-            <span className="text-red-400 font-medium">This action cannot be undone.</span>
-          </p>
+          <div>
+            <h3 className="text-lg font-bold text-white">¿Eliminar Operación?</h3>
+            <p className="text-slate-400 text-xs mt-1.5 leading-relaxed">
+              ¿Estás seguro de que deseas eliminar este registro de trade? <br/>
+              <span className="text-rose-400 font-medium">Esta acción no se puede deshacer.</span>
+            </p>
+          </div>
 
-          <div className="grid grid-cols-2 gap-3 w-full mt-4">
+          <div className="grid grid-cols-2 gap-3 w-full pt-2">
             <button
               onClick={onClose}
               disabled={isDeleting}
-              className="w-full py-3 rounded-xl bg-[#0b0e11] border border-gray-700 text-gray-300 font-bold hover:bg-gray-800 transition disabled:opacity-50"
+              className="w-full py-2.5 rounded-xl bg-[#0D1117] border border-white/[0.08] text-slate-300 font-semibold hover:bg-white/[0.06] transition disabled:opacity-50 text-xs cursor-pointer"
             >
-              Cancel
+              Cancelar
             </button>
             
             <button
               onClick={onConfirm}
               disabled={isDeleting}
-              className="w-full py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-500 transition flex items-center justify-center gap-2 disabled:opacity-50 shadow-[0_0_20px_rgba(220,38,38,0.4)]"
+              className="w-full py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-500 transition flex items-center justify-center gap-2 disabled:opacity-50 shadow-[0_0_20px_rgba(244,63,94,0.35)] text-xs cursor-pointer"
             >
-              {isDeleting ? <Loader2 className="animate-spin" size={18} /> : <><Trash2 size={18} /> Delete</>}
+              {isDeleting ? <Loader2 className="animate-spin" size={16} /> : <><Trash2 size={15} /> Eliminar</>}
             </button>
           </div>
 

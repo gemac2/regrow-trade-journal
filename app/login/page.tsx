@@ -1,17 +1,15 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation'; // Importamos useSearchParams
+import { useRouter, useSearchParams } from 'next/navigation';
 import { authClient } from '@/app/lib/auth';
 import { Logo } from '@/components/Logo';
-import { Mail, Lock, User, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, Loader2, ShieldCheck, ArrowRight } from 'lucide-react';
 
-// Separamos el formulario en un componente interno para usar useSearchParams dentro de Suspense
 function AuthForm() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // Hook para leer la URL
+  const searchParams = useSearchParams();
   
-  // Detectamos si la URL tiene ?view=register
   const initialView = searchParams.get('view') === 'register' ? false : true;
 
   const [isLoginView, setIsLoginView] = useState(initialView); 
@@ -22,7 +20,6 @@ function AuthForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Efecto para actualizar la vista si cambia la URL (opcional pero recomendado)
   useEffect(() => {
     if (searchParams.get('view') === 'register') {
       setIsLoginView(false);
@@ -48,9 +45,9 @@ function AuthForm() {
         if (error) throw error;
         router.push('/dashboard');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      const msg = err.message || (isLoginView ? "Invalid credentials." : "Registration failed.");
+      const msg = (err instanceof Error ? err.message : null) || (isLoginView ? "Credenciales inválidas." : "Error al registrarse.");
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -58,129 +55,145 @@ function AuthForm() {
   };
 
   return (
-    <div className="flex w-full max-w-[420px] flex-col items-center space-y-6"> 
-        
-        {/* Header Section */}
-        <div className="flex flex-col items-center text-center">
-          <div className="-mt-[70px]"> 
-            <Logo />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight -mt-[70px] text-white">Trading Journal</h1>
-          <p className="text-sm text-gray-400 mt-1">Welcome back, trader.</p>
+    <div className="flex w-full max-w-[420px] flex-col items-center space-y-6 animate-in fade-in zoom-in-95 duration-300"> 
+      
+      {/* Header Section */}
+      <div className="flex flex-col items-center text-center space-y-2">
+        <div className="scale-90 mb-1"> 
+          <Logo />
         </div>
-
-        {/* Glowing Card Container */}
-        <div className="relative w-full rounded-3xl p-[1px] bg-gradient-to-r from-[#00FF7F] to-[#00A3FF] shadow-[0_0_40px_-10px_rgba(0,255,127,0.3),0_0_40px_-10px_rgba(0,163,255,0.3)]">
-          <div className="h-full w-full rounded-[23px] bg-[#0B0E11]/95 p-8 backdrop-blur-xl border border-white/5">
-            
-            {/* Tabs */}
-            <div className="mb-8 flex border-b border-gray-800/50">
-              <button
-                type="button"
-                onClick={() => setIsLoginView(true)}
-                className={`flex-1 pb-3 text-sm font-semibold transition-all relative ${
-                  isLoginView ? 'text-[#00FF7F]' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                Login
-                {isLoginView && <div className="absolute bottom-0 left-0 h-[2px] w-full bg-[#00FF7F] shadow-[0_-2px_10px_rgba(0,255,127,0.5)]"></div>}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsLoginView(false)}
-                className={`flex-1 pb-3 text-sm font-semibold transition-all relative ${
-                  !isLoginView ? 'text-[#00A3FF]' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                Register
-                {!isLoginView && <div className="absolute bottom-0 left-0 h-[2px] w-full bg-[#00A3FF] shadow-[0_-2px_10px_rgba(0,163,255,0.5)]"></div>}
-              </button>
-            </div>
-
-            {errorMessage && (
-              <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-center text-xs font-medium text-red-400">
-                {errorMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              
-              {!isLoginView && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <label htmlFor="name" className="text-xs font-medium text-gray-400 ml-1">Full Name</label>
-                  <div className="relative group">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-                      <User className="h-5 w-5 text-gray-500 group-focus-within:text-[#00A3FF] transition-colors" />
-                    </div>
-                    <input
-                      id="name"
-                      type="text"
-                      required={!isLoginView}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="block w-full rounded-xl border border-gray-800/80 bg-[#13171D]/80 py-3 pl-12 text-sm text-white placeholder-gray-600 focus:border-[#00A3FF] focus:ring-1 focus:ring-[#00A3FF] focus:outline-none transition-all"
-                      placeholder="John Doe"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-xs font-medium text-gray-400 ml-1">Email</label>
-                <div className="relative group">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-                    <Mail className="h-5 w-5 text-gray-500 group-focus-within:text-[#00A3FF] transition-colors" />
-                  </div>
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full rounded-xl border border-gray-800/80 bg-[#13171D]/80 py-3 pl-12 text-sm text-white placeholder-gray-600 focus:border-[#00A3FF] focus:ring-1 focus:ring-[#00A3FF] focus:outline-none transition-all"
-                    placeholder="trader@regrow.com"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-xs font-medium text-gray-400 ml-1">Password</label>
-                <div className="relative group">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-                    <Lock className="h-5 w-5 text-gray-500 group-focus-within:text-[#00A3FF] transition-colors" />
-                  </div>
-                  <input
-                    id="password"
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full rounded-xl border border-gray-800/80 bg-[#13171D]/80 py-3 pl-12 text-sm text-white placeholder-gray-600 focus:border-[#00A3FF] focus:ring-1 focus:ring-[#00A3FF] focus:outline-none transition-all"
-                    placeholder="••••••••"
-                    minLength={8}
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="mt-6 w-full rounded-xl bg-gradient-to-r from-[#00FF7F] to-[#00A3FF] py-3 text-base font-bold text-black transition-all hover:opacity-90 hover:shadow-[0_0_20px_rgba(0,255,127,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center active:scale-[0.98]"
-              >
-                {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (isLoginView ? 'Login' : 'Create Account')}
-              </button>
-            </form>
-          </div>
+        <div className="space-y-1">
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">Trading Journal Pro</h1>
+          <p className="text-xs text-slate-400">Terminal institucional de registro y análisis</p>
         </div>
       </div>
+
+      {/* Glowing Card Container */}
+      <div className="w-full rounded-3xl border border-white/[0.12] bg-[#121824]/90 p-7 backdrop-blur-2xl shadow-2xl relative">
+        
+        {/* Tabs */}
+        <div className="mb-6 grid grid-cols-2 p-1 bg-[#0D1117] rounded-xl border border-white/[0.06]">
+          <button
+            type="button"
+            onClick={() => setIsLoginView(true)}
+            className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              isLoginView 
+                ? 'bg-gradient-to-r from-[#00E599]/20 to-[#00A3FF]/10 text-white border border-[#00E599]/30 shadow-sm' 
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Iniciar Sesión
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsLoginView(false)}
+            className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              !isLoginView 
+                ? 'bg-gradient-to-r from-[#00A3FF]/20 to-[#00E599]/10 text-white border border-[#00A3FF]/30 shadow-sm' 
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Registrarse
+          </button>
+        </div>
+
+        {errorMessage && (
+          <div className="mb-5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-center text-xs font-medium text-rose-300 animate-in fade-in duration-200">
+            {errorMessage}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {!isLoginView && (
+            <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+              <label htmlFor="name" className="text-xs font-semibold text-slate-300">Nombre Completo</label>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                  <User size={17} />
+                </div>
+                <input
+                  id="name"
+                  type="text"
+                  required={!isLoginView}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="block w-full rounded-xl border border-white/[0.08] bg-[#0D1117] py-2.5 pl-10 pr-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-[#00E599] outline-none transition-all"
+                  placeholder="Tu nombre"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label htmlFor="email" className="text-xs font-semibold text-slate-300">Correo Electrónico</label>
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                <Mail size={17} />
+              </div>
+              <input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="block w-full rounded-xl border border-white/[0.08] bg-[#0D1117] py-2.5 pl-10 pr-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-[#00E599] outline-none transition-all"
+                placeholder="trader@regrow.com"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="text-xs font-semibold text-slate-300">Contraseña</label>
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                <Lock size={17} />
+              </div>
+              <input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="block w-full rounded-xl border border-white/[0.08] bg-[#0D1117] py-2.5 pl-10 pr-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-[#00E599] outline-none transition-all"
+                placeholder="••••••••"
+                minLength={8}
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="mt-6 w-full rounded-xl bg-gradient-to-r from-[#00E599] to-[#00c985] py-3 text-sm font-bold text-slate-950 transition-all hover:brightness-105 shadow-[0_0_20px_rgba(0,229,153,0.3)] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <Loader2 className="animate-spin h-5 w-5" />
+            ) : (
+              <>
+                <span>{isLoginView ? 'Acceder al Dashboard' : 'Crear Cuenta'}</span>
+                <ArrowRight size={16} />
+              </>
+            )}
+          </button>
+        </form>
+      </div>
+
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <ShieldCheck size={14} className="text-[#00E599]" />
+        <span>Autenticación y cifrado en base de datos Neon</span>
+      </div>
+    </div>
   );
 }
 
-// Componente Principal envuelto en Suspense
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-[#05070A] bg-[radial-gradient(#ffffff05_1px,transparent_1px)] [background-size:20px_20px] p-4 font-sans text-white selection:bg-blue-500/30">
-      <Suspense fallback={<div className="text-[#00FF7F] font-bold animate-pulse">Loading Interface...</div>}>
+    <div className="flex min-h-screen w-full items-center justify-center bg-[#080B11] p-4 text-white relative overflow-hidden">
+      {/* Luces difusas de fondo */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[400px] bg-gradient-to-b from-[#00E599]/10 to-[#00A3FF]/10 blur-[130px] rounded-full pointer-events-none -z-10" />
+      
+      <Suspense fallback={<div className="text-[#00E599] font-bold animate-pulse text-sm">Cargando interfaz...</div>}>
         <AuthForm />
       </Suspense>
     </div>
