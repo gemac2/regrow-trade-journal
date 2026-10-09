@@ -573,8 +573,21 @@ export default function TradesPage() {
 
       {/* --- TABLE CARD --- */}
       <div className="bg-[#121824] rounded-2xl border border-white/[0.08] overflow-hidden shadow-xl flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
+        {/* Barra superior de ayuda para scroll */}
+        <div className="flex items-center justify-between px-5 py-2.5 bg-[#0D1117]/90 border-b border-white/[0.06] text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#00E599]"></span>
+            <span className="font-semibold text-slate-200">12 Columnas en Detalle</span>
+            <span className="text-slate-500 hidden sm:inline">| Vista expandida</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-[#00A3FF]">
+            <ArrowUpDown size={12} className="rotate-90" />
+            <span>Desplaza horizontalmente para explorar todas las columnas</span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto w-full [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#0D1117] [&::-webkit-scrollbar-thumb]:bg-slate-700/80 hover:[&::-webkit-scrollbar-thumb]:bg-[#00E599]/60 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <table className="w-full min-w-[1340px] text-left text-sm text-slate-300">
             <thead className="bg-[#0D1117] text-slate-400 uppercase text-[11px] font-bold tracking-wider border-b border-white/[0.08]">
               <tr>
                 <th className="px-4 py-4">Fecha</th>
@@ -588,7 +601,7 @@ export default function TradesPage() {
                 <th className="px-4 py-4">Riesgo</th>
                 <th className="px-4 py-4 text-right">PnL Neto</th>
                 <th className="px-4 py-4">Duración</th>
-                <th className="px-4 py-4 text-center">Acciones</th>
+                <th className="px-4 py-4 text-center sticky right-0 bg-[#0D1117] z-20 shadow-[-8px_0_12px_rgba(0,0,0,0.5)] border-l border-white/[0.06]">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
@@ -777,7 +790,7 @@ export default function TradesPage() {
                       </td>
 
                       {/* 12. Acciones */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap sticky right-0 bg-[#121824] group-hover:bg-[#151c2a] z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.5)] border-l border-white/[0.06]">
                         <div className="flex items-center justify-center gap-1.5">
                           <button 
                             onClick={() => handleEdit(trade)}

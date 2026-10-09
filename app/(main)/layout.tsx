@@ -112,11 +112,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         />
         
         {/* CONTENIDO PRINCIPAL CON TOPBAR */}
-        <div className="flex-1 w-full md:ml-64 flex flex-col min-h-screen">
+        <div className="flex-1 min-w-0 w-full md:w-[calc(100%-16rem)] md:ml-64 flex flex-col min-h-screen">
           <TopNavHeader onOpenMobileMenu={() => setIsSidebarOpen(true)} />
           
-          <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-            <div className="max-w-7xl mx-auto pb-16 md:pb-8">
+          <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto overflow-x-hidden">
+            <div className="max-w-7xl mx-auto min-w-0 pb-16 md:pb-8">
               {children}
             </div>
           </main>
