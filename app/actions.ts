@@ -573,6 +573,7 @@ export async function getHedgeStats(userId: string, accountId: number) {
 
     const totalHedgeTrades = hedgeTrades.length;
     let notTriggeredCount = 0;
+    let notTriggeredPnl = 0;
     let triggeredCount = 0;
     let winCount = 0;
     let lossCount = 0;
@@ -599,8 +600,16 @@ export async function getHedgeStats(userId: string, accountId: number) {
 
       if (!trade.hedgeTriggered || trade.hedgeStatus === 'NOT_TRIGGERED') {
         notTriggeredCount++;
-        // No tocó cobertura: el riesgo asumido es el riesgo definido inicial
-        if (trade.riskPercentage) {
+        // No tocó cobertura: se resolvió directamente (ej. se fue directo a Take Profit)
+        const pnl = trade.pnl ? parseFloat(trade.pnl) : 0;
+        notTriggeredPnl += pnl;
+        totalHedgePnl += pnl;
+
+        // Si fue ganador o breakeven directo, el riesgo perdido fue 0%
+        if (trade.pnl !== null && trade.pnl !== undefined && parseFloat(trade.pnl) >= 0) {
+          sumRiskPercent += 0;
+          countRiskPercent++;
+        } else if (trade.riskPercentage) {
           const r = parseFloat(trade.riskPercentage);
           if (!isNaN(r)) {
             sumRiskPercent += r;
@@ -673,12 +682,12 @@ export async function getHedgeStats(userId: string, accountId: number) {
       }
     });
 
+    // Tasas porcentuales sobre el universo total de operaciones con modo cobertura
     const notTriggeredRate = totalHedgeTrades > 0 ? (notTriggeredCount / totalHedgeTrades) * 100 : 0;
     const triggeredRate = totalHedgeTrades > 0 ? (triggeredCount / totalHedgeTrades) * 100 : 0;
-    const resolvedCount = winCount + lossCount + breakevenCount;
-    const winRate = resolvedCount > 0 ? (winCount / resolvedCount) * 100 : 0;
-    const lossRate = resolvedCount > 0 ? (lossCount / resolvedCount) * 100 : 0;
-    const breakevenRate = resolvedCount > 0 ? (breakevenCount / resolvedCount) * 100 : 0;
+    const winRate = totalHedgeTrades > 0 ? (winCount / totalHedgeTrades) * 100 : 0;
+    const lossRate = totalHedgeTrades > 0 ? (lossCount / totalHedgeTrades) * 100 : 0;
+    const breakevenRate = totalHedgeTrades > 0 ? (breakevenCount / totalHedgeTrades) * 100 : 0;
     const managingRate = totalHedgeTrades > 0 ? (managingCount / totalHedgeTrades) * 100 : 0;
     
     // Riesgo promedio efectivo tomando en cuenta el % real perdido en coberturas cerradas
@@ -691,17 +700,18 @@ export async function getHedgeStats(userId: string, accountId: number) {
       data: {
         totalHedgeTrades,
         notTriggeredCount,
-        notTriggeredRate: notTriggeredRate.toFixed(1),
+        notTriggeredRate: notTriggeredRate.toFixed(2),
+        notTriggeredPnl: notTriggeredPnl.toFixed(2),
         triggeredCount,
-        triggeredRate: triggeredRate.toFixed(1),
+        triggeredRate: triggeredRate.toFixed(2),
         winCount,
         lossCount,
         breakevenCount,
         managingCount,
-        managingRate: managingRate.toFixed(1),
-        winRate: winRate.toFixed(1),
-        lossRate: lossRate.toFixed(1),
-        breakevenRate: breakevenRate.toFixed(1),
+        managingRate: managingRate.toFixed(2),
+        winRate: winRate.toFixed(2),
+        lossRate: lossRate.toFixed(2),
+        breakevenRate: breakevenRate.toFixed(2),
         totalHedgePnl: totalHedgePnl.toFixed(2),
         totalHedgeWinsPnl: totalHedgeWinsPnl.toFixed(2),
         totalHedgeLossesPnl: totalHedgeLossesPnl.toFixed(2),

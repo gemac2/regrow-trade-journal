@@ -49,6 +49,7 @@ export interface ExportStatsParams {
     totalHedgeTrades: number;
     notTriggeredCount: number;
     notTriggeredRate: string;
+    notTriggeredPnl?: string;
     winCount: number;
     winRate: string;
     lossCount: number;
@@ -269,7 +270,7 @@ export async function exportStatisticsExcel({ accountName, stats, hedgeData, tra
 
     const t2Data = [
       ['Total Modo Hedge', `${hedgeData.totalHedgeTrades} ops`, '100.0%', '-', 'Total de operaciones configuradas con cobertura'],
-      ['No Tocaron Cobertura', `${hedgeData.notTriggeredCount} ops`, `${hedgeData.notTriggeredRate}%`, '-', 'Operaciones directas que no requirieron abrir orden hedge'],
+      ['No Tocaron Cobertura', `${hedgeData.notTriggeredCount} ops`, `${hedgeData.notTriggeredRate}%`, `${Number(hedgeData.notTriggeredPnl || 0) >= 0 ? '+' : ''}$${hedgeData.notTriggeredPnl || '0.00'}`, 'Operaciones directas a TP sin requerir abrir orden hedge'],
       ['Coberturas Ganadas', `${hedgeData.winCount} ops`, `${hedgeData.winRate}% Win`, `+$${hedgeData.totalHedgeWinsPnl}`, 'Coberturas cerradas donde la gestión generó ganancia neta'],
       ['Coberturas Perdidas', `${hedgeData.lossCount} ops`, `${hedgeData.lossRate}% Loss`, `-$${hedgeData.totalHedgeLossesPnl}`, 'Coberturas cerradas que resultaron en pérdida controlada'],
       ['A Break Even (BE)', `${hedgeData.breakevenCount} ops`, `${hedgeData.breakevenRate}% BE`, '$0.00', 'Coberturas cerradas en punto de equilibrio sin pérdidas'],

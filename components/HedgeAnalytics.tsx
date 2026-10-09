@@ -20,6 +20,7 @@ interface HedgeData {
   totalHedgeTrades: number;
   notTriggeredCount: number;
   notTriggeredRate: string;
+  notTriggeredPnl?: string;
   triggeredCount: number;
   triggeredRate: string;
   winCount: number;
@@ -232,7 +233,9 @@ export function HedgeAnalytics({
           </div>
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-mono font-bold text-white">{data.notTriggeredCount}</p>
-            <span className="text-xs text-slate-500 font-mono">de {data.totalHedgeTrades} ops</span>
+            <span className={`text-xs font-mono font-bold ${parseFloat(data.notTriggeredPnl || '0') >= 0 ? 'text-[#00E599]' : 'text-rose-400'}`}>
+              {parseFloat(data.notTriggeredPnl || '0') > 0 ? '+' : ''}${data.notTriggeredPnl || '0.00'}
+            </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-2 leading-tight">
             Operaciones directas al take profit sin requerir activar la cobertura.
