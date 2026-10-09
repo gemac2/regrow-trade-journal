@@ -58,7 +58,7 @@ function TradeModalForm({
   onClose: () => void; 
   tradeToEdit?: TradeRecord | null;
 }) {
-  const { selectedAccount } = useAccount();
+  const { selectedAccount, refreshCurrentBalance } = useAccount();
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState<string>(tradeToEdit?.type ? String(tradeToEdit.type) : 'LONG');
 
@@ -148,6 +148,7 @@ function TradeModalForm({
       await createTrade(formData);
     }
     
+    await refreshCurrentBalance();
     setLoading(false);
     onClose();
   }

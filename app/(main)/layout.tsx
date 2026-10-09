@@ -13,7 +13,7 @@ import { Logo } from '@/components/Logo';
 
 function TopNavHeader({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
   const pathname = usePathname();
-  const { selectedAccount } = useAccount();
+  const { selectedAccount, currentBalance } = useAccount();
 
   const getPageTitle = () => {
     if (pathname.includes('/trades')) return 'Bitácora de Operaciones';
@@ -30,9 +30,13 @@ function TopNavHeader({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
         </div>
         <div className="flex items-center gap-2">
           {selectedAccount && (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#121824] text-slate-200 border border-white/[0.08] truncate max-w-[120px]">
-              {selectedAccount.name}
-            </span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#121824] text-slate-200 border border-white/[0.08] text-xs">
+              <Wallet size={12} className="text-[#00A3FF]" />
+              <span className="font-medium text-slate-300 truncate max-w-[90px]">{selectedAccount.name}</span>
+              <span className="font-mono text-[#00E599] font-bold text-[11px]" title="Saldo Actual">
+                ${Number(currentBalance || selectedAccount.initialBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
           )}
           <button 
             onClick={onOpenMobileMenu}
@@ -64,11 +68,14 @@ function TopNavHeader({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
           </div>
 
           {selectedAccount && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#121824] border border-white/[0.08] text-xs">
-              <Wallet size={13} className="text-[#00A3FF]" />
-              <span className="font-medium text-slate-300">{selectedAccount.name}</span>
-              <span className="text-[10px] font-mono text-[#00E599] font-bold bg-[#00E599]/10 px-1.5 py-0.2 rounded border border-[#00E599]/20">
-                ${Number(selectedAccount.initialBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-[#121824] border border-white/[0.08] text-xs shadow-sm">
+              <Wallet size={14} className="text-[#00A3FF]" />
+              <span className="font-semibold text-slate-200">{selectedAccount.name}</span>
+              <span 
+                className="text-[11px] font-mono text-[#00E599] font-bold bg-[#00E599]/10 px-2 py-0.5 rounded-lg border border-[#00E599]/25 shadow-sm"
+                title="Saldo Actual de la Cuenta"
+              >
+                ${Number(currentBalance || selectedAccount.initialBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
           )}

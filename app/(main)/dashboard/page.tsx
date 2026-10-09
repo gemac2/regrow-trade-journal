@@ -40,7 +40,7 @@ interface DashboardStats {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { selectedAccount, isLoading: isAccountLoading } = useAccount();
+  const { selectedAccount, isLoading: isAccountLoading, refreshCurrentBalance } = useAccount();
   
   const [loading, setLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -106,6 +106,9 @@ export default function DashboardPage() {
     }
 
     setLoading(false);
+    if (refreshCurrentBalance) {
+      refreshCurrentBalance();
+    }
   }
 
   const netPnlNum = Number(stats.netPnL);

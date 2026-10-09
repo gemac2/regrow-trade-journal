@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getAccounts, createAccount } from '@/app/actions';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { getAccounts, createAccount, getStats } from '@/app/actions';
 import { useAuth } from '@/app/hooks/useAuth';
 
 interface Account {
@@ -13,9 +13,11 @@ interface Account {
 interface AccountContextType {
   accounts: Account[];
   selectedAccount: Account | null;
+  currentBalance: string;
   isLoading: boolean;
   switchAccount: (accountId: number) => void;
   createNewAccount: (name: string, balance: string) => Promise<boolean>;
+  refreshCurrentBalance: () => Promise<void>;
 }
 
 const AccountContext = createContext<AccountContextType | undefined>(undefined);
@@ -24,7 +26,22 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [currentBalance, setCurrentBalance] = useState<string>('0.00');
   const [isLoading, setIsLoading] = useState(true);
+
+  const loadBalance = useCallback(async (userId: string, accountId: number) => {
+    try {
+      const res = await getStats(userId, accountId);
+      if (res.success && res.data) {
+        const statsData = res.data as { currentBalance?: string };
+        if (statsData.currentBalance) {
+          setCurrentBalance(statsData.currentBalance);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading current balance:', err);
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -38,9 +55,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     
     if (success && data) {
       setAccounts(data);
-      // Si hay cuentas, seleccionamos la primera (o podriamos guardar la ultima en localStorage)
       if (data.length > 0) {
         setSelectedAccount(data[0]);
+        setCurrentBalance(data[0].initialBalance);
+        loadBalance(userId, data[0].id);
       }
     }
     setIsLoading(false);
@@ -48,8 +66,20 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const switchAccount = (accountId: number) => {
     const acc = accounts.find(a => a.id === accountId);
-    if (acc) setSelectedAccount(acc);
+    if (acc) {
+      setSelectedAccount(acc);
+      setCurrentBalance(acc.initialBalance);
+      if (user) {
+        loadBalance(user.id, acc.id);
+      }
+    }
   };
+
+  const refreshCurrentBalance = useCallback(async () => {
+    if (user && selectedAccount) {
+      await loadBalance(user.id, selectedAccount.id);
+    }
+  }, [user, selectedAccount, loadBalance]);
 
   const createNewAccount = async (name: string, balance: string) => {
     if (!user) return false;
@@ -58,14 +88,23 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     if (success && data) {
       const newAcc = data as Account;
       setAccounts(prev => [...prev, newAcc]);
-      setSelectedAccount(newAcc); // Seleccionamos la nueva automaticamente
+      setSelectedAccount(newAcc);
+      setCurrentBalance(newAcc.initialBalance);
       return true;
     }
     return false;
   };
 
   return (
-    <AccountContext.Provider value={{ accounts, selectedAccount, isLoading, switchAccount, createNewAccount }}>
+    <AccountContext.Provider value={{ 
+      accounts, 
+      selectedAccount, 
+      currentBalance, 
+      isLoading, 
+      switchAccount, 
+      createNewAccount,
+      refreshCurrentBalance 
+    }}>
       {children}
     </AccountContext.Provider>
   );

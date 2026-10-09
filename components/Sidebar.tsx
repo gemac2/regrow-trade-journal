@@ -31,7 +31,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
-  const { accounts, selectedAccount, switchAccount } = useAccount();
+  const { accounts, selectedAccount, switchAccount, currentBalance } = useAccount();
   
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -111,10 +111,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#00E599]/20 to-[#00A3FF]/20 border border-[#00E599]/30 flex items-center justify-center text-[#00E599] shrink-0">
                   <Wallet size={16} />
                 </div>
-                <div className="overflow-hidden">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block leading-tight">
-                    Cuenta Activa
-                  </span>
+                <div className="overflow-hidden flex-1 min-w-0 pr-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block leading-tight">
+                      Cuenta Activa
+                    </span>
+                    {selectedAccount && (
+                      <span className="text-[10px] font-mono font-bold text-[#00E599] shrink-0" title="Saldo Actual">
+                        ${Number(currentBalance || selectedAccount.initialBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-sm font-semibold truncate block text-white group-hover:text-[#00E599] transition-colors">
                     {selectedAccount?.name || 'Cargando...'}
                   </span>

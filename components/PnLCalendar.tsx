@@ -31,6 +31,15 @@ interface PnLCalendarProps {
   data: DayData[];
 }
 
+function formatPnlWithDecimals(val: number) {
+  const sign = val > 0 ? '+' : val < 0 ? '-' : '';
+  const formattedAbs = Math.abs(val).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${sign}$${formattedAbs}`;
+}
+
 export function PnLCalendar({ data }: PnLCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -208,11 +217,11 @@ export function PnLCalendar({ data }: PnLCalendarProps) {
                         )}
                       </div>
 
-                      {/* Monto PnL */}
+                      {/* Monto PnL con dos decimales */}
                       {hasTrade ? (
-                        <div className="flex flex-col items-center justify-center my-auto">
-                          <span className={cn("text-xs sm:text-sm font-mono tracking-tight", pnlColor)}>
-                            {pnl > 0 ? '+' : ''}${Math.round(pnl).toLocaleString()}
+                        <div className="flex flex-col items-center justify-center my-auto w-full px-0.5">
+                          <span className={cn("text-[10px] sm:text-xs font-mono font-bold tracking-tight text-center truncate max-w-full", pnlColor)}>
+                            {formatPnlWithDecimals(pnl)}
                           </span>
                         </div>
                       ) : (
@@ -234,7 +243,7 @@ export function PnLCalendar({ data }: PnLCalendarProps) {
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-slate-300">PnL Neto:</span>
                             <span className={`font-mono font-bold ${pnl > 0 ? 'text-[#00E599]' : pnl < 0 ? 'text-rose-400' : 'text-slate-300'}`}>
-                              {pnl > 0 ? '+' : ''}${pnl.toFixed(2)}
+                              {formatPnlWithDecimals(pnl)}
                             </span>
                           </div>
                           <div className="pt-1">
